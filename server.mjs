@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { readFile, rename, stat, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -10,11 +10,13 @@ const DATA_DIR = globalThis.process?.env?.DATA_DIR || path.join(ROOT_DIR, "data"
 const DATA_FILE = path.join(DATA_DIR, "escape-data.json");
 const MAX_BODY_SIZE = 30 * 1024 * 1024;
 const ADMIN_PASSWORD = globalThis.process?.env?.ADMIN_PASSWORD || "ErezeeGestion-2026!";
+const ODOO_WEBHOOK_SECRET = globalThis.process?.env?.ODOO_WEBHOOK_SECRET || "";
 const ADMIN_COOKIE_NAME = "escape_erezee_admin";
 const ADMIN_SESSION_MAX_AGE = 12 * 60 * 60;
 const ADMIN_SESSION_TOKEN = createHash("sha256")
   .update(`${ADMIN_PASSWORD}:${globalThis.process?.env?.ADMIN_SESSION_SECRET || DATA_FILE}`)
   .digest("hex");
+let dataMutationQueue = Promise.resolve();
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -146,6 +148,244 @@ async function writeStoredData(payload) {
   await rename(tempFile, DATA_FILE);
 }
 
+function withDataMutation(task) {
+  const run = dataMutationQueue.then(task, task);
+  dataMutationQueue = run.catch(() => {});
+  return run;
+}
+
+function compactText(value) {
+  const text = String(value ?? "").trim();
+  return text || "";
+}
+
+function getFirstText(...values) {
+  return values.map(compactText).find(Boolean) || "";
+}
+
+function normalizeLookupValue(value) {
+  return compactText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
+function getOdooSecret(request, payload) {
+  const authHeader = compactText(request.headers.authorization);
+  const bearerSecret = authHeader.replace(/^Bearer\s+/i, "").trim();
+  return getFirstText(
+    request.headers["x-escape-webhook-secret"],
+    request.headers["x-odoo-webhook-secret"],
+    bearerSecret,
+    payload?.secret,
+    payload?.webhookSecret,
+  );
+}
+
+function getOdooRouteCandidates(payload) {
+  const product = payload?.product && typeof payload.product === "object" ? payload.product : {};
+  const orderLine = payload?.orderLine && typeof payload.orderLine === "object" ? payload.orderLine : {};
+  return [
+    payload?.routeId,
+    payload?.route_id,
+    payload?.route,
+    payload?.routeCode,
+    payload?.route_code,
+    payload?.productCode,
+    payload?.product_code,
+    payload?.default_code,
+    payload?.sku,
+    product.routeId,
+    product.route_id,
+    product.default_code,
+    product.code,
+    product.sku,
+    product.name,
+    orderLine.routeId,
+    orderLine.route_id,
+    orderLine.default_code,
+    orderLine.productCode,
+    orderLine.product_code,
+    orderLine.name,
+  ].filter((value) => compactText(value));
+}
+
+function resolveOdooRoute(data, payload) {
+  const routes = Array.isArray(data?.routes) ? data.routes : [];
+  const candidates = getOdooRouteCandidates(payload).map(normalizeLookupValue).filter(Boolean);
+
+  for (const route of routes) {
+    const routeValues = [
+      route.id,
+      route.title,
+      route.area,
+      route.odooProductCode,
+      route.productCode,
+      route.externalId,
+    ].map(normalizeLookupValue);
+    if (routeValues.some((value) => value && candidates.includes(value))) {
+      return route;
+    }
+  }
+
+  if (!candidates.length && routes.length === 1) {
+    return routes[0];
+  }
+
+  return null;
+}
+
+function makeActivationCode(route, data) {
+  const prefix = compactText(route?.area || route?.title || "ERE")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/gi, "")
+    .slice(0, 3)
+    .toUpperCase()
+    .padEnd(3, "E");
+
+  let code = "";
+  do {
+    code = `${randomInt(100, 1000)}-${prefix}-${randomInt(100, 1000)}`;
+  } while (data.codes.some((item) => item.code === code));
+  return code;
+}
+
+function getOdooOrderId(payload) {
+  const order = payload?.order && typeof payload.order === "object" ? payload.order : {};
+  return getFirstText(
+    payload?.orderId,
+    payload?.order_id,
+    payload?.saleOrderId,
+    payload?.sale_order_id,
+    payload?.orderName,
+    payload?.order_name,
+    payload?.name,
+    order.id,
+    order.name,
+  );
+}
+
+function getOdooOrderLineId(payload) {
+  const orderLine = payload?.orderLine && typeof payload.orderLine === "object" ? payload.orderLine : {};
+  return getFirstText(
+    payload?.orderLineId,
+    payload?.order_line_id,
+    payload?.lineId,
+    payload?.line_id,
+    orderLine.id,
+  );
+}
+
+function findExistingOdooCode(data, route, payload) {
+  const orderId = getOdooOrderId(payload);
+  if (!orderId) return null;
+  const orderLineId = getOdooOrderLineId(payload);
+
+  return data.codes.find((item) => (
+    item.routeId === route.id
+      && item.source === "odoo"
+      && compactText(item.odooOrderId) === orderId
+      && (!orderLineId || compactText(item.odooOrderLineId) === orderLineId)
+  )) || null;
+}
+
+function createOdooCode(data, route, payload) {
+  const partner = payload?.partner && typeof payload.partner === "object" ? payload.partner : {};
+  const customer = payload?.customer && typeof payload.customer === "object" ? payload.customer : {};
+  const orderId = getOdooOrderId(payload);
+  const orderLineId = getOdooOrderLineId(payload);
+  const activationCode = {
+    code: makeActivationCode(route, data),
+    routeId: route.id,
+    status: "available",
+    teamId: null,
+    createdAt: Date.now(),
+    source: "odoo",
+    odooOrderId: orderId || null,
+    odooOrderLineId: orderLineId || null,
+    customerEmail: getFirstText(payload?.customerEmail, payload?.customer_email, customer.email, partner.email) || null,
+    customerName: getFirstText(payload?.customerName, payload?.customer_name, customer.name, partner.name) || null,
+  };
+  data.codes.unshift(activationCode);
+  return activationCode;
+}
+
+function buildActivationMailBody(code, route) {
+  return [
+    "Bonjour,",
+    "",
+    `Merci pour votre achat du parcours ${route.title}.`,
+    `Votre code d'activation est : ${code}`,
+    "",
+    "Vous pouvez demarrer la partie ici : https://escape-erezee.be/index.html#player",
+    "",
+    "Bonne aventure !",
+  ].join("\n");
+}
+
+async function handleOdooActivationCode(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+
+  if (!ODOO_WEBHOOK_SECRET) {
+    sendJson(response, 503, { message: "Integration Odoo non configuree." });
+    return true;
+  }
+
+  try {
+    const body = await readRequestBody(request);
+    const payload = body ? JSON.parse(body) : {};
+    if (!safeCompare(getOdooSecret(request, payload), ODOO_WEBHOOK_SECRET)) {
+      sendJson(response, 401, { message: "Cle Odoo invalide." });
+      return true;
+    }
+
+    const result = await withDataMutation(async () => {
+      const stored = await readStoredData();
+      if (!stored) {
+        return { status: 409, payload: { message: "Aucune donnee serveur disponible." } };
+      }
+
+      const route = resolveOdooRoute(stored, payload);
+      if (!route) {
+        return { status: 400, payload: { message: "Parcours introuvable pour cette commande." } };
+      }
+
+      const existing = findExistingOdooCode(stored, route, payload);
+      const activationCode = existing || createOdooCode(stored, route, payload);
+      if (!existing) {
+        await writeStoredData(stored);
+      }
+
+      return {
+        status: 200,
+        payload: {
+          ok: true,
+          reused: Boolean(existing),
+          code: activationCode.code,
+          activationCode: activationCode.code,
+          routeId: route.id,
+          routeTitle: route.title,
+          orderId: activationCode.odooOrderId,
+          customerEmail: activationCode.customerEmail,
+          emailSubject: "Votre code Escape Erezee",
+          emailBody: buildActivationMailBody(activationCode.code, route),
+        },
+      };
+    });
+
+    sendJson(response, result.status, result.payload);
+  } catch (error) {
+    sendJson(response, 400, { message: error.message || "Creation du code impossible." });
+  }
+
+  return true;
+}
+
 async function handleApi(request, response, pathname) {
   if (pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
@@ -193,6 +433,10 @@ async function handleApi(request, response, pathname) {
     return true;
   }
 
+  if (pathname === "/api/odoo/activation-code" || pathname === "/api/integrations/odoo/activation-code") {
+    return handleOdooActivationCode(request, response);
+  }
+
   if (pathname !== "/api/data") return false;
 
   if (request.method === "GET") {
@@ -213,13 +457,19 @@ async function handleApi(request, response, pathname) {
         sendJson(response, 400, { message: "Format de donnees invalide." });
         return true;
       }
-      const stored = await readStoredData();
-      if (!isAdminRequest(request) && !isPlayerSafeUpdate(stored, payload)) {
-        sendJson(response, 403, { message: "Acces gestion requis." });
+      const saveResult = await withDataMutation(async () => {
+        const stored = await readStoredData();
+        if (!isAdminRequest(request) && !isPlayerSafeUpdate(stored, payload)) {
+          return { status: 403, payload: { message: "Acces gestion requis." } };
+        }
+        await writeStoredData(payload);
+        return { status: 200, payload: { ok: true, savedAt: Date.now() } };
+      });
+      if (saveResult.status !== 200) {
+        sendJson(response, saveResult.status, saveResult.payload);
         return true;
       }
-      await writeStoredData(payload);
-      sendJson(response, 200, { ok: true, savedAt: Date.now() });
+      sendJson(response, saveResult.status, saveResult.payload);
     } catch (error) {
       sendJson(response, 400, { message: error.message || "Sauvegarde impossible." });
     }
