@@ -146,8 +146,9 @@ La version directe par fichier fonctionne encore pour tester l’interface. Pour
 
 ## Prochaines étapes
 
-- Ajouter des comptes organisateur et une vraie connexion admin.
-- Remplacer le fichier JSON par une base de données de production.
-- Déployer le backend sur un hébergement accessible aux téléphones.
+- Brancher `escape-erezee.be` dans Render et chez le fournisseur DNS.
+- Ajouter la clé `ODOO_WEBHOOK_SECRET` dans Render.
+- Créer les produits Odoo et l'action automatisée qui déclenche la création du code après paiement.
+- Remplacer le fichier JSON par une base de données de production ou un stockage persistant.
 - Tester le parcours GPS sur le terrain à Erezée.
 - Préparer l’empaquetage iOS/Android via Capacitor ou une application native.
