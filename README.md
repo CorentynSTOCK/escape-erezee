@@ -67,6 +67,73 @@ Sur le plan gratuit, les données serveur peuvent être réinitialisées après 
 
 Au premier lancement, si le backend ne contient encore aucune donnée, l’application initialise automatiquement le fichier serveur avec les données présentes dans le navigateur.
 
+## Nom de domaine
+
+Le domaine final prévu est :
+
+```text
+https://escape-erezee.be
+```
+
+Dans Render, ajouter `escape-erezee.be` dans les domaines personnalisés du service `escape-erezee`.
+Render ajoute aussi la variante `www.escape-erezee.be` et affiche les lignes DNS à copier chez le fournisseur du nom de domaine.
+
+Points importants :
+
+- supprimer les anciens enregistrements `AAAA` s'il y en a ;
+- copier exactement les enregistrements DNS proposés par Render ;
+- revenir ensuite dans Render et cliquer sur `Verify` ;
+- attendre quelques minutes si la vérification DNS n'est pas immédiate ;
+- une fois validé, Render gère automatiquement le HTTPS.
+
+## Connexion Odoo
+
+L'application expose une adresse réservée à Odoo :
+
+```text
+POST https://escape-erezee.be/api/odoo/activation-code
+```
+
+Cette adresse crée un code d'activation quand Odoo indique qu'une commande est payée. Elle renvoie ensuite le code pour qu'Odoo puisse le placer dans un champ personnalisé et l'envoyer par e-mail au client.
+
+Protection à configurer dans Render :
+
+```text
+ODOO_WEBHOOK_SECRET=une-cle-secrete-longue
+```
+
+Odoo doit envoyer la même clé dans l'en-tête :
+
+```text
+x-escape-webhook-secret: une-cle-secrete-longue
+```
+
+Exemple de données envoyées par Odoo :
+
+```json
+{
+  "orderId": "SO042",
+  "routeId": "route-tramway",
+  "customerEmail": "client@example.com",
+  "customerName": "Client Test"
+}
+```
+
+Réponse de l'application :
+
+```json
+{
+  "ok": true,
+  "code": "123-ERE-456",
+  "activationCode": "123-ERE-456",
+  "routeId": "route-tramway",
+  "routeTitle": "Le Secret du Tramway"
+}
+```
+
+Si Odoo renvoie deux fois la même commande, l'application renvoie le même code au lieu d'en créer un nouveau.
+Tant qu'il n'y a qu'un seul parcours, Odoo peut ne pas envoyer `routeId`. Quand il y aura plusieurs produits/parcours, le plus simple sera de mettre la référence interne du produit Odoo égale à l'identifiant du parcours, par exemple `route-tramway`.
+
 ## Essai rapide
 
 Code de démonstration :
