@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Escape Erezée - gestion et application joueur pour escape game extérieur."
+    />
+    <meta name="theme-color" content="#123c32" />
+    <title>Escape Erezée</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css?v=20" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-nav" aria-label="Navigation principale">
+        <a class="brand" href="#player" aria-label="Escape Erezée">
+          <span class="brand-mark" aria-hidden="true">EE</span>
+          <span>
+            <strong>Escape Erezée</strong>
+            <small>Jeu extérieur</small>
+          </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Espaces">
+          <a class="nav-link" href="#player" data-route="player">
+            <span aria-hidden="true">⌖</span>
+            Jouer
+          </a>
+          <a class="nav-link" href="#admin" data-route="admin">
+            <span aria-hidden="true">▦</span>
+            Gestion
+          </a>
+        </nav>
+
+        <div class="side-note">
+          <strong>Code test</strong>
+          <button class="copy-code" type="button" data-copy-code="742-ERE-931">
+            742-ERE-931
+          </button>
+        </div>
+      </aside>
+
+      <main>
+        <section class="view player-view" id="player-view" aria-labelledby="player-title">
+          <header class="topbar">
+            <div>
+              <p class="section-label">Application joueur</p>
+              <h1 id="player-title">Parcours en équipe</h1>
+            </div>
+            <button class="ghost-button" type="button" id="reset-session-button">
+              Changer de code
+            </button>
+          </header>
+
+          <div class="player-layout">
+            <section class="login-panel" id="login-panel" aria-label="Connexion joueur">
+              <div class="login-copy">
+                <h2>Entrez votre code d’activation</h2>
+                <p>
+                  Chaque équipe reçoit un code unique pour ouvrir son parcours et
+                  lancer le temps de jeu.
+                </p>
+              </div>
+              <form class="activation-form" id="activation-form">
+                <label for="activation-code">Code d’activation</label>
+                <div class="inline-form">
+                  <input
+                    id="activation-code"
+                    name="activation-code"
+                    autocomplete="one-time-code"
+                    inputmode="text"
+                    placeholder="742-ERE-931"
+                    required
+                  />
+                  <button class="primary-button" type="submit">Valider</button>
+                </div>
+                <p class="form-message" id="activation-message" role="status"></p>
+              </form>
+            </section>
+
+            <section class="phone-frame" id="game-panel" aria-label="Partie en cours">
+              <div class="phone-status">
+                <div class="team-identity">
+                  <span id="team-name">Equipe</span>
+                  <button class="team-edit-button" type="button" id="edit-team-button">
+                    Modifier
+                  </button>
+                </div>
+                <strong id="countdown">90:00</strong>
+              </div>
+
+              <form class="team-name-form is-hidden" id="team-name-form">
+                <label for="team-name-input">Nom d’équipe</label>
+                <div class="inline-form">
+                  <input id="team-name-input" name="team-name-input" maxlength="32" required />
+                  <button class="primary-button" type="submit">Enregistrer</button>
+                </div>
+              </form>
+
+              <div class="route-hero">
+                <div>
+                  <p class="route-place" id="route-area">Erezée</p>
+                  <h2 id="route-title">Le Secret du Tramway</h2>
+                </div>
+                <span class="status-pill" id="game-status">En cours</span>
+              </div>
+
+              <div class="progress-block">
+                <div class="progress-header">
+                  <span id="progress-text">0 / 4 énigmes</span>
+                  <span id="elapsed-time">0 min</span>
+                </div>
+                <div class="progress-track" aria-hidden="true">
+                  <span id="progress-fill"></span>
+                </div>
+              </div>
+
+              <section class="finish-panel is-hidden" id="finish-panel" aria-labelledby="finish-title">
+                <p class="section-label" id="finish-label">Résultat</p>
+                <h2 id="finish-title">Félicitations</h2>
+                <p id="finish-subtitle"></p>
+                <div class="finish-stats">
+                  <div>
+                    <span>Temps final</span>
+                    <strong id="finish-time">--:--</strong>
+                  </div>
+                  <div>
+                    <span>Énigmes résolues</span>
+                    <strong id="finish-score">--</strong>
+                  </div>
+                  <div>
+                    <span>Classement</span>
+                    <strong id="finish-rank">--</strong>
+                  </div>
+                </div>
+                <div class="ranking-block">
+                  <h3>Classement du parcours</h3>
+                  <ol id="ranking-list"></ol>
+                </div>
+              </section>
+
+              <article class="map-panel" aria-label="Carte du parcours">
+                <div class="map-canvas player-map" id="player-map" aria-label="Carte terrain">
+                  <div class="map-tiles" aria-hidden="true"></div>
+                  <div class="map-layer" aria-hidden="true"></div>
+                  <div class="map-attribution">© OpenStreetMap</div>
+                </div>
+                <div class="map-actions">
+                  <button class="secondary-button" type="button" id="locate-button">
+                    Me géolocaliser
+                  </button>
+                  <button class="text-button" type="button" id="demo-unlock-button">
+                    Démo zone
+                  </button>
+                </div>
+                <p class="distance-note" id="distance-note" role="status"></p>
+              </article>
+
+              <article class="riddle-card" id="riddle-card">
+                <div class="riddle-head">
+                  <span class="step-number" id="step-number">1</span>
+                  <div>
+                    <p id="step-place">Ancienne gare</p>
+                    <h3 id="step-title">Première énigme</h3>
+                  </div>
+                </div>
+                <p class="riddle-text" id="riddle-text"></p>
+                <div class="riddle-media is-hidden" id="riddle-media"></div>
+                <div id="answer-zone"></div>
+                <div class="hint-row">
+                  <button class="secondary-button" type="button" id="hint-button">
+                    Indice
+                  </button>
+                  <span id="hint-state"></span>
+                </div>
+                <p class="form-message" id="answer-message" role="status"></p>
+              </article>
+            </section>
+          </div>
+        </section>
+
+        <section class="view admin-view" id="admin-view" aria-labelledby="admin-title">
+          <header class="topbar admin-topbar">
+            <div>
+              <p class="section-label">Application web PC</p>
+              <h1 id="admin-title">Gestion des parcours</h1>
+            </div>
+            <div class="topbar-actions">
+              <button class="secondary-button" type="button" id="seed-button">
+                Réinitialiser la démo
+              </button>
+              <button class="primary-button" type="button" id="generate-code-button">
+                Créer un code
+              </button>
+            </div>
+          </header>
+
+          <div class="admin-grid">
+            <section class="admin-panel wide-panel" aria-labelledby="routes-heading">
+              <div class="panel-title">
+                <div>
+                  <p class="section-label">Parcours</p>
+                  <h2 id="routes-heading">Expériences disponibles</h2>
+                </div>
+                <span id="route-count"></span>
+              </div>
+              <div class="route-list" id="route-list"></div>
+            </section>
+
+            <section class="admin-panel" aria-labelledby="create-route-heading">
+              <div class="panel-title compact-title">
+                <div>
+                  <p class="section-label">Création</p>
+                  <h2 id="create-route-heading">Nouveau parcours</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="route-form">
+                <label>
+                  Nom
+                  <input name="title" required placeholder="Mystère de la vallée" />
+                </label>
+                <label>
+                  Zone
+                  <input name="area" required placeholder="Erezée centre" />
+                </label>
+                <label>
+                  Durée en minutes
+                  <input name="duration" required type="number" min="15" value="90" />
+                </label>
+                <label>
+                  Description
+                  <textarea name="description" required placeholder="Description courte du parcours"></textarea>
+                </label>
+                <button class="primary-button full-button" type="submit">Ajouter</button>
+              </form>
+            </section>
+
+            <section class="admin-panel wide-panel" aria-labelledby="route-details-heading">
+              <div class="panel-title">
+                <div>
+                  <p class="section-label">Détails</p>
+                  <h2 id="route-details-heading">Parcours actif</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="route-details-form">
+                <div class="coordinate-grid">
+                  <label>
+                    Nom
+                    <input id="route-details-title" name="route-details-title" required />
+                  </label>
+                  <label>
+                    Zone
+                    <input id="route-details-area" name="route-details-area" required />
+                  </label>
+                </div>
+                <label>
+                  Durée en minutes
+                  <input id="route-details-duration" name="route-details-duration" type="number" min="1" required />
+                </label>
+                <label>
+                  Description
+                  <textarea id="route-details-description" name="route-details-description" required></textarea>
+                </label>
+                <p class="form-message" id="route-details-message" role="status"></p>
+                <button class="primary-button full-button" type="submit">Enregistrer le parcours</button>
+              </form>
+            </section>
+
+            <section class="admin-panel wide-panel" aria-labelledby="puzzles-heading">
+              <div class="panel-title">
+                <div>
+                  <p class="section-label">Énigmes</p>
+                  <h2 id="puzzles-heading">Scénario du parcours actif</h2>
+                </div>
+                <select id="route-select" aria-label="Parcours actif"></select>
+              </div>
+              <div class="puzzle-list" id="puzzle-list"></div>
+            </section>
+
+            <section class="admin-panel wide-panel" aria-labelledby="content-heading">
+              <div class="panel-title">
+                <div>
+                  <p class="section-label">Contenu</p>
+                  <h2 id="content-heading">Texte de l’énigme</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="puzzle-content-form">
+                <label>
+                  Énigme
+                  <select id="content-puzzle-select" name="content-puzzle-select"></select>
+                </label>
+                <div class="coordinate-grid">
+                  <label>
+                    Titre
+                    <input id="content-title" name="content-title" required />
+                  </label>
+                  <label>
+                    Lieu
+                    <input id="content-place" name="content-place" required />
+                  </label>
+                </div>
+                <label>
+                  Texte affiché au joueur
+                  <textarea id="content-question" name="content-question" required></textarea>
+                </label>
+                <label class="file-input puzzle-image-uploader">
+                  Image de l’énigme
+                  <input id="content-image" name="content-image" type="file" accept="image/*" />
+                  <span class="preview-name">Choisissez une image depuis votre ordinateur.</span>
+                </label>
+                <div class="image-preview is-empty" id="content-image-preview">
+                  Aucune image ajoutée.
+                </div>
+                <button class="secondary-button full-button" id="remove-content-image" type="button">
+                  Supprimer l’image
+                </button>
+                <div class="coordinate-grid">
+                  <label>
+                    Type de réponse
+                    <select id="content-type" name="content-type">
+                      <option value="text">Réponse écrite</option>
+                      <option value="photo">Photo</option>
+                    </select>
+                  </label>
+                  <label>
+                    Réponse attendue
+                    <input id="content-answer" name="content-answer" required />
+                  </label>
+                </div>
+                <p class="form-message" id="content-message" role="status"></p>
+                <button class="primary-button full-button" type="submit">Enregistrer l’énigme</button>
+              </form>
+            </section>
+
+            <section class="admin-panel" aria-labelledby="create-puzzle-heading">
+              <div class="panel-title compact-title">
+                <div>
+                  <p class="section-label">Ajout</p>
+                  <h2 id="create-puzzle-heading">Nouvelle énigme</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="puzzle-form">
+                <label>
+                  Titre
+                  <input name="title" required placeholder="La pierre gravée" />
+                </label>
+                <label>
+                  Lieu
+                  <input name="place" required placeholder="Chapelle du village" />
+                </label>
+                <label>
+                  Type
+                  <select name="type">
+                    <option value="text">Réponse écrite</option>
+                    <option value="photo">Photo</option>
+                  </select>
+                </label>
+                <label>
+                  Texte affiché au joueur
+                  <textarea name="question" required placeholder="Votre énigme complète"></textarea>
+                </label>
+                <label class="file-input">
+                  Image de l’énigme
+                  <input name="image" type="file" accept="image/*" />
+                  <span class="preview-name">Facultatif.</span>
+                </label>
+                <label>
+                  Réponse attendue
+                  <input name="answer" required placeholder="EREZEE" />
+                </label>
+                <button class="primary-button full-button" type="submit">Ajouter</button>
+              </form>
+            </section>
+
+            <section class="admin-panel" aria-labelledby="geo-heading">
+              <div class="panel-title compact-title">
+                <div>
+                  <p class="section-label">Carte</p>
+                  <h2 id="geo-heading">Zone de validation</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="geo-form">
+                <label>
+                  Énigme
+                  <select id="geo-puzzle-select" name="geo-puzzle-select"></select>
+                </label>
+                <div class="map-canvas admin-map" id="admin-map" aria-label="Carte de réglage">
+                  <div class="map-tiles" aria-hidden="true"></div>
+                  <div class="map-layer" aria-hidden="true"></div>
+                  <div class="map-attribution">© OpenStreetMap</div>
+                </div>
+                <div class="coordinate-grid">
+                  <label>
+                    Latitude
+                    <input id="geo-lat" name="geo-lat" inputmode="decimal" />
+                  </label>
+                  <label>
+                    Longitude
+                    <input id="geo-lng" name="geo-lng" inputmode="decimal" />
+                  </label>
+                </div>
+                <label>
+                  Rayon accepté en mètres
+                  <input id="geo-radius" name="geo-radius" type="number" min="20" max="1000" step="10" />
+                </label>
+                <label class="check-row">
+                  <input id="geo-required" name="geo-required" type="checkbox" />
+                  Demander la présence dans cette zone
+                </label>
+                <p class="form-message" id="geo-message" role="status">
+                  Cliquez sur la carte pour placer le point de validation.
+                </p>
+                <button class="primary-button full-button" type="submit">Enregistrer la zone</button>
+              </form>
+            </section>
+
+            <section class="admin-panel" aria-labelledby="hints-heading">
+              <div class="panel-title compact-title">
+                <div>
+                  <p class="section-label">Aide</p>
+                  <h2 id="hints-heading">Indices</h2>
+                </div>
+              </div>
+              <form class="stacked-form" id="hints-form">
+                <label>
+                  Énigme
+                  <select id="hint-puzzle-select" name="hint-puzzle-select"></select>
+                </label>
+                <div class="hint-list-editor" id="hint-list-editor"></div>
+                <button class="secondary-button full-button" type="button" id="add-hint-button">
+                  Ajouter un indice
+                </button>
+                <p class="form-message" id="hint-editor-message" role="status"></p>
+                <button class="primary-button full-button" type="submit">Enregistrer les indices</button>
+              </form>
+            </section>
+
+            <section class="admin-panel wide-panel" aria-labelledby="teams-heading">
+              <div class="panel-title">
+                <div>
+                  <p class="section-label">Équipes</p>
+                  <h2 id="teams-heading">Progression en direct</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Équipe</th>
+                      <th>Code</th>
+                      <th>Parcours</th>
+                      <th>Progression</th>
+                      <th>État</th>
+                    </tr>
+                  </thead>
+                  <tbody id="team-table"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="admin-panel" aria-labelledby="codes-heading">
+              <div class="panel-title compact-title">
+                <div>
+                  <p class="section-label">Codes</p>
+                  <h2 id="codes-heading">Activation</h2>
+                </div>
+              </div>
+              <div class="code-list" id="code-list"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="image-viewer is-hidden" id="image-viewer" role="dialog" aria-modal="true" aria-labelledby="image-viewer-title">
+      <button class="image-viewer-backdrop" type="button" aria-label="Fermer l’image" data-close-image-viewer></button>
+      <div class="image-viewer-panel">
+        <div class="image-viewer-toolbar">
+          <div>
+            <p class="section-label">Image</p>
+            <h2 id="image-viewer-title">Image de l’énigme</h2>
+          </div>
+          <div class="image-viewer-actions">
+            <button class="secondary-button" id="image-zoom-out" type="button">-</button>
+            <button class="secondary-button" id="image-zoom-reset" type="button">100%</button>
+            <button class="secondary-button" id="image-zoom-in" type="button">+</button>
+            <button class="primary-button" id="image-viewer-close" type="button">Fermer</button>
+          </div>
+        </div>
+        <div class="image-viewer-stage" id="image-viewer-stage">
+          <img id="image-viewer-img" alt="" />
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js?v=20" type="module"></script>
+  </body>
+</html>
