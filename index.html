@@ -11,7 +11,7 @@
     <title>Escape Erezée</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20" />
+    <link rel="stylesheet" href="styles.css?v=22" />
   </head>
   <body>
     <div class="app-shell">
@@ -183,22 +183,51 @@
         </section>
 
         <section class="view admin-view" id="admin-view" aria-labelledby="admin-title">
-          <header class="topbar admin-topbar">
+          <section class="admin-login-panel" id="admin-login-panel" aria-labelledby="admin-login-title">
             <div>
-              <p class="section-label">Application web PC</p>
-              <h1 id="admin-title">Gestion des parcours</h1>
+              <p class="section-label">Accès réservé</p>
+              <h1 id="admin-login-title">Connexion gestion</h1>
+              <p>
+                Cette zone permet de modifier les parcours, les énigmes, les codes
+                d’activation et le suivi des équipes.
+              </p>
             </div>
-            <div class="topbar-actions">
-              <button class="secondary-button" type="button" id="seed-button">
-                Réinitialiser la démo
-              </button>
-              <button class="primary-button" type="button" id="generate-code-button">
-                Créer un code
-              </button>
-            </div>
-          </header>
+            <form class="admin-login-form" id="admin-login-form">
+              <label for="admin-password">Mot de passe gestion</label>
+              <div class="inline-form">
+                <input
+                  id="admin-password"
+                  name="admin-password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+                <button class="primary-button" type="submit">Se connecter</button>
+              </div>
+              <p class="form-message" id="admin-login-message" role="status"></p>
+            </form>
+          </section>
 
-          <div class="admin-grid">
+          <div class="admin-content is-hidden" id="admin-content">
+            <header class="topbar admin-topbar">
+              <div>
+                <p class="section-label">Application web PC</p>
+                <h1 id="admin-title">Gestion des parcours</h1>
+              </div>
+              <div class="topbar-actions">
+                <button class="secondary-button" type="button" id="admin-logout-button">
+                  Se déconnecter
+                </button>
+                <button class="secondary-button" type="button" id="seed-button">
+                  Réinitialiser la démo
+                </button>
+                <button class="primary-button" type="button" id="generate-code-button">
+                  Créer un code
+                </button>
+              </div>
+            </header>
+
+            <div class="admin-grid">
             <section class="admin-panel wide-panel" aria-labelledby="routes-heading">
               <div class="panel-title">
                 <div>
@@ -470,6 +499,7 @@
               </div>
               <div class="code-list" id="code-list"></div>
             </section>
+            </div>
           </div>
         </section>
       </main>
@@ -498,6 +528,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="app.js?v=20" type="module"></script>
+    <script src="app.js?v=22" type="module"></script>
   </body>
 </html>
