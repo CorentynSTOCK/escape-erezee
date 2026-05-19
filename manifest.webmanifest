@@ -1,0 +1,19 @@
+{
+  "name": "Escape Erezée",
+  "short_name": "Escape Erezée",
+  "description": "Application joueur et gestion PC pour escape game extérieur.",
+  "start_url": "./index.html#player",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f5",
+  "theme_color": "#123c32",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
