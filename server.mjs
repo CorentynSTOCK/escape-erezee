@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile, rename, stat, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,12 @@ const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = globalThis.process?.env?.DATA_DIR || path.join(ROOT_DIR, "data");
 const DATA_FILE = path.join(DATA_DIR, "escape-data.json");
 const MAX_BODY_SIZE = 30 * 1024 * 1024;
+const ADMIN_PASSWORD = globalThis.process?.env?.ADMIN_PASSWORD || "ErezeeGestion-2026!";
+const ADMIN_COOKIE_NAME = "escape_erezee_admin";
+const ADMIN_SESSION_MAX_AGE = 12 * 60 * 60;
+const ADMIN_SESSION_TOKEN = createHash("sha256")
+  .update(`${ADMIN_PASSWORD}:${globalThis.process?.env?.ADMIN_SESSION_SECRET || DATA_FILE}`)
+  .digest("hex");
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -19,10 +26,11 @@ const MIME_TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...headers,
   });
   response.end(JSON.stringify(payload));
 }
@@ -34,6 +42,74 @@ function isAppData(value) {
       && Array.isArray(value.routes)
       && Array.isArray(value.codes)
       && Array.isArray(value.teams),
+  );
+}
+
+function safeCompare(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function parseCookies(cookieHeader = "") {
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf("=");
+      if (separatorIndex === -1) return cookies;
+      const name = decodeURIComponent(part.slice(0, separatorIndex));
+      const value = decodeURIComponent(part.slice(separatorIndex + 1));
+      cookies[name] = value;
+      return cookies;
+    }, {});
+}
+
+function isSecureRequest(request) {
+  const forwardedProto = String(request.headers["x-forwarded-proto"] || "");
+  return forwardedProto.split(",")[0].trim() === "https" || Boolean(request.socket?.encrypted);
+}
+
+function makeAdminCookie(request, value, maxAge) {
+  const secure = isSecureRequest(request) ? "; Secure" : "";
+  return `${ADMIN_COOKIE_NAME}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+function isAdminRequest(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  return safeCompare(cookies[ADMIN_COOKIE_NAME], ADMIN_SESSION_TOKEN);
+}
+
+function stableJson(value) {
+  return JSON.stringify(value ?? null);
+}
+
+function codesKeepSameCatalog(previousCodes, nextCodes) {
+  if (!Array.isArray(previousCodes) || !Array.isArray(nextCodes)) return false;
+  if (previousCodes.length !== nextCodes.length) return false;
+
+  const previousByCode = new Map(previousCodes.map((code) => [code.code, code]));
+  return nextCodes.every((nextCode) => {
+    const previousCode = previousByCode.get(nextCode.code);
+    if (!previousCode) return false;
+    return (
+      previousCode.routeId === nextCode.routeId
+      && previousCode.createdAt === nextCode.createdAt
+      && ["available", "used"].includes(nextCode.status)
+      && (nextCode.teamId === null || typeof nextCode.teamId === "string")
+    );
+  });
+}
+
+function isPlayerSafeUpdate(previousData, nextData) {
+  if (!previousData) return true;
+  return (
+    previousData.activeRouteId === nextData.activeRouteId
+    && stableJson(previousData.routes) === stableJson(nextData.routes)
+    && codesKeepSameCatalog(previousData.codes, nextData.codes)
+    && Array.isArray(nextData.teams)
   );
 }
 
@@ -76,6 +152,47 @@ async function handleApi(request, response, pathname) {
     return true;
   }
 
+  if (pathname === "/api/admin/session") {
+    if (request.method !== "GET") {
+      sendJson(response, 405, { message: "Methode non autorisee." });
+      return true;
+    }
+    sendJson(response, 200, { authenticated: isAdminRequest(request) });
+    return true;
+  }
+
+  if (pathname === "/api/admin/login") {
+    if (request.method !== "POST") {
+      sendJson(response, 405, { message: "Methode non autorisee." });
+      return true;
+    }
+    try {
+      const body = await readRequestBody(request);
+      const payload = body ? JSON.parse(body) : {};
+      if (!safeCompare(payload.password, ADMIN_PASSWORD)) {
+        sendJson(response, 401, { message: "Mot de passe incorrect." });
+        return true;
+      }
+      sendJson(response, 200, { ok: true }, {
+        "Set-Cookie": makeAdminCookie(request, ADMIN_SESSION_TOKEN, ADMIN_SESSION_MAX_AGE),
+      });
+    } catch {
+      sendJson(response, 400, { message: "Connexion impossible." });
+    }
+    return true;
+  }
+
+  if (pathname === "/api/admin/logout") {
+    if (request.method !== "POST") {
+      sendJson(response, 405, { message: "Methode non autorisee." });
+      return true;
+    }
+    sendJson(response, 200, { ok: true }, {
+      "Set-Cookie": makeAdminCookie(request, "", 0),
+    });
+    return true;
+  }
+
   if (pathname !== "/api/data") return false;
 
   if (request.method === "GET") {
@@ -94,6 +211,11 @@ async function handleApi(request, response, pathname) {
       const payload = JSON.parse(body);
       if (!isAppData(payload)) {
         sendJson(response, 400, { message: "Format de donnees invalide." });
+        return true;
+      }
+      const stored = await readStoredData();
+      if (!isAdminRequest(request) && !isPlayerSafeUpdate(stored, payload)) {
+        sendJson(response, 403, { message: "Acces gestion requis." });
         return true;
       }
       await writeStoredData(payload);
