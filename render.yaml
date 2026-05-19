@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: escape-erezee
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATA_DIR
+        value: /opt/render/project/src/storage
+    disk:
+      name: escape-erezee-data
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 1
