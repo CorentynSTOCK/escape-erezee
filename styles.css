@@ -295,6 +295,44 @@ main {
   box-shadow: var(--shadow);
 }
 
+.admin-login-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: 28px;
+  align-items: center;
+  max-width: 980px;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 12px 36px rgba(18, 60, 50, 0.08);
+}
+
+.admin-login-panel h1 {
+  margin: 2px 0 14px;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.04;
+}
+
+.admin-login-panel p {
+  max-width: 600px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.admin-login-form {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f7faf8;
+}
+
+.admin-login-panel.is-hidden,
+.admin-content.is-hidden {
+  display: none;
+}
+
 .login-copy {
   max-width: 560px;
   margin-bottom: 48px;
@@ -1319,6 +1357,7 @@ td {
   }
 
   .player-layout,
+  .admin-login-panel,
   .admin-grid {
     grid-template-columns: 1fr;
   }
@@ -1374,6 +1413,10 @@ td {
   .login-panel {
     min-height: auto;
     padding: 24px;
+  }
+
+  .admin-login-panel {
+    padding: 22px;
   }
 
   .login-copy {
