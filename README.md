@@ -57,13 +57,13 @@ https://adresse-du-tunnel.lhr.life/index.html#player
 
 Le PC doit rester allumé, le backend doit continuer à tourner, et la fenêtre du tunnel doit rester ouverte pendant le test.
 
-Si le tunnel temporaire n’est pas stable, utiliser le déploiement Render inclus dans `render.yaml`. Render donnera une URL publique HTTPS du type :
+Si le tunnel temporaire n’est pas stable, utiliser le déploiement Render inclus dans `render.yaml`. La configuration utilise le plan gratuit pour les tests terrain. Render donnera une URL publique HTTPS du type :
 
 ```text
 https://escape-erezee.onrender.com/index.html#player
 ```
 
-Le fichier `render.yaml` prévoit un petit disque persistant afin de conserver `escape-data.json` entre les redémarrages.
+Sur le plan gratuit, les données serveur peuvent être réinitialisées après un redémarrage ou un redéploiement. Pour une utilisation réelle avec conservation durable des parcours, il faudra passer sur un hébergement avec stockage persistant ou base de données.
 
 Au premier lancement, si le backend ne contient encore aucune donnée, l’application initialise automatiquement le fichier serveur avec les données présentes dans le navigateur.
 
