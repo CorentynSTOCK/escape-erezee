@@ -3,6 +3,6 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "start": "node render-runtime-patch.mjs && node server.mjs"
+    "start": "node render-runtime-patch.mjs && node render-live-position-patch.mjs && node server.mjs"
   }
 }
