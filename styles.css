@@ -254,6 +254,13 @@ main {
   color: var(--green);
 }
 
+a.secondary-button,
+a.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ghost-button {
   border: 1px solid rgba(18, 60, 50, 0.14);
   background: rgba(255, 255, 255, 0.65);
@@ -351,6 +358,170 @@ main {
   color: rgba(255, 255, 255, 0.78);
   font-size: 1.06rem;
   line-height: 1.6;
+}
+
+.shop-topbar {
+  align-items: center;
+}
+
+.shop-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.shop-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.shop-heading h2 {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+}
+
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.shop-route-card {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.35fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(18, 60, 50, 0.08);
+}
+
+.shop-route-copy {
+  min-width: 0;
+}
+
+.shop-route-visual {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  min-height: 210px;
+  align-content: space-between;
+  padding: 16px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(18, 60, 50, 0.92), rgba(44, 127, 163, 0.78)),
+    radial-gradient(circle at 28% 24%, rgba(241, 180, 73, 0.36), transparent 32%),
+    #123c32;
+  color: #fff;
+}
+
+.shop-route-visual.has-image {
+  background: #123c32;
+}
+
+.shop-route-visual.has-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(18, 60, 50, 0.58), rgba(18, 60, 50, 0.2) 42%, rgba(18, 60, 50, 0.74));
+}
+
+.shop-route-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shop-route-visual span,
+.shop-route-visual strong {
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.34);
+}
+
+.shop-route-visual span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.shop-route-visual strong {
+  align-self: end;
+  font-size: 1.35rem;
+}
+
+.shop-route-card h3 {
+  margin: 8px 0 8px;
+  color: var(--ink);
+  font-size: 1.22rem;
+  line-height: 1.18;
+}
+
+.shop-route-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.shop-route-card .metric {
+  background: #eef5f1;
+  color: var(--green);
+}
+
+.shop-badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(241, 180, 73, 0.18);
+  color: #8b5a0e;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.shop-buy-form {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(140px, 180px) 1fr minmax(150px, 190px);
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f6faf8;
+}
+
+.shop-buy-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.shop-buy-form input {
+  min-height: 40px;
+}
+
+.shop-buy-form strong {
+  color: var(--green);
+  font-size: 1.35rem;
+}
+
+.shop-empty {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 750;
 }
 
 .activation-form {
@@ -932,7 +1103,8 @@ textarea {
   font-weight: 750;
 }
 
-.puzzle-image-uploader {
+.puzzle-image-uploader,
+.route-image-uploader {
   margin-top: 2px;
 }
 
@@ -1141,6 +1313,16 @@ textarea {
   font-weight: 850;
 }
 
+.metric.is-success {
+  background: rgba(40, 127, 79, 0.12);
+  color: var(--success);
+}
+
+.metric.is-muted {
+  background: #edf0ee;
+  color: var(--muted);
+}
+
 .route-card button {
   align-self: start;
 }
@@ -1305,6 +1487,15 @@ td {
   letter-spacing: 0.04em;
 }
 
+.code-customer,
+.code-mail-status {
+  color: var(--green);
+}
+
+.code-mail-status {
+  font-weight: 850;
+}
+
 .code-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1349,7 +1540,7 @@ td {
 
   .main-nav {
     grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .side-note {
@@ -1376,6 +1567,7 @@ td {
   .topbar,
   .panel-title,
   .route-card,
+  .shop-route-card,
   .puzzle-row,
   .code-row {
     grid-template-columns: 1fr;
@@ -1392,6 +1584,7 @@ td {
   .coordinate-grid,
   .hint-condition-grid,
   .code-actions,
+  .shop-buy-form,
   .image-viewer-actions {
     display: grid;
     width: 100%;

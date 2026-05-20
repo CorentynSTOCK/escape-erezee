@@ -6,11 +6,13 @@ Application web pour créer et jouer un escape game extérieur dans la région d
 
 - Espace joueur accessible depuis `index.html#player`.
 - Espace gestion PC accessible depuis `index.html#admin`.
+- Boutique joueur avec prix par personne et affichage automatique des parcours publiés.
 - Connexion joueur par code unique d’activation.
 - Backend local sans dépendance externe avec sauvegarde dans `data/escape-data.json`.
 - Parcours, descriptions, énigmes, équipes, codes, images, indices et progression synchronisés côté serveur quand l’app est lancée via le backend.
 - Mode fichier conservé : si l’app est ouverte directement, elle continue à fonctionner avec le stockage du navigateur.
 - Création et édition du titre, de la zone, de la durée et de la description des parcours.
+- Réglage du prix par personne et de la visibilité boutique pour chaque parcours.
 - Ajout d’une image facultative dans chaque énigme, affichée côté joueur après déblocage, avec visionneuse plein écran et zoom.
 - Timer de partie, progression, indices conditionnels, réponses écrites et validation photo.
 - Carte de terrain avec tuiles OpenStreetMap, position joueur, objectif et rayon de validation.
@@ -86,6 +88,49 @@ Points importants :
 - attendre quelques minutes si la vérification DNS n'est pas immédiate ;
 - une fois validé, Render gère automatiquement le HTTPS.
 
+## Boutique et Stripe
+
+La boutique de l'application affiche uniquement les parcours dont l'option `Visible dans la boutique` est active. Le prix est géré dans la fiche du parcours, sous forme de prix par personne.
+
+Pour activer le paiement Stripe, ajouter ces variables dans Render :
+
+```text
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+PUBLIC_APP_URL=https://escape-erezee.be
+```
+
+La page Stripe demande automatiquement l'e-mail, le prenom, le nom et l'adresse du client. Ces informations sont rattachees au code d'activation et visibles dans la gestion.
+
+Le webhook Stripe doit pointer vers :
+
+```text
+POST https://escape-erezee.be/api/stripe/webhook
+```
+
+Quand un paiement Stripe Checkout est validé, l'application crée automatiquement un code d'activation pour le parcours acheté. Le retour de paiement affiche le code au client pour qu'il puisse démarrer la partie.
+
+Pour envoyer automatiquement le code par e-mail au client, configurer aussi un compte Resend et ajouter :
+
+```text
+RESEND_API_KEY=re_...
+MAIL_FROM=Escape Erezee <contact@escape-erezee.be>
+MAIL_REPLY_TO=contact@escape-erezee.be
+```
+
+Si ces variables ne sont pas encore configurees, le paiement et le code fonctionnent quand meme, mais aucun e-mail automatique n'est envoye.
+
+### Test reel local
+
+Pour tester Stripe et l'envoi d'e-mail sans mettre les cles dans le code :
+
+1. creer un fichier `.env.real-test.local` a partir de `.env.real-test.example` ;
+2. completer les cles Stripe en mode test, le secret webhook Stripe et les cles Resend ;
+3. lancer `start-real-test.cmd` ;
+4. lancer ensuite `start-public-tunnel.cmd` si le test doit etre accessible depuis un telephone hors reseau local.
+
+Le fichier `.env.real-test.local` est ignore par Git et doit rester prive.
+
 ## Connexion Odoo
 
 L'application expose une adresse réservée à Odoo :
@@ -147,8 +192,8 @@ La version directe par fichier fonctionne encore pour tester l’interface. Pour
 ## Prochaines étapes
 
 - Brancher `escape-erezee.be` dans Render et chez le fournisseur DNS.
-- Ajouter la clé `ODOO_WEBHOOK_SECRET` dans Render.
-- Créer les produits Odoo et l'action automatisée qui déclenche la création du code après paiement.
+- Ajouter les clés `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` et `MAIL_FROM` dans Render.
+- Configurer le webhook Stripe vers `/api/stripe/webhook`.
 - Remplacer le fichier JSON par une base de données de production ou un stockage persistant.
 - Tester le parcours GPS sur le terrain à Erezée.
 - Préparer l’empaquetage iOS/Android via Capacitor ou une application native.

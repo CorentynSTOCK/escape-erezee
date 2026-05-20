@@ -2,12 +2,18 @@ const STORAGE_KEY = "escape-erezee-data-v1";
 const SESSION_KEY = "escape-erezee-team";
 const ACTIVE_ROUTE_KEY = "escape-erezee-active-route";
 const API_DATA_URL = "/api/data";
+const API_CHECKOUT_URL = "/api/shop/checkout";
+const API_CHECKOUT_SESSION_URL = "/api/shop/checkout-session";
+const ADMIN_SESSION_URL = "/api/admin/session";
+const ADMIN_LOGIN_URL = "/api/admin/login";
+const ADMIN_LOGOUT_URL = "/api/admin/logout";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 const els = {
   views: {
+    shop: $("#shop-view"),
     player: $("#player-view"),
     admin: $("#admin-view"),
   },
@@ -18,6 +24,8 @@ const els = {
   activationForm: $("#activation-form"),
   activationCode: $("#activation-code"),
   activationMessage: $("#activation-message"),
+  shopList: $("#shop-list"),
+  shopEmpty: $("#shop-empty"),
   resetSessionButton: $("#reset-session-button"),
   teamName: $("#team-name"),
   editTeamButton: $("#edit-team-button"),
@@ -53,6 +61,12 @@ const els = {
   demoUnlockButton: $("#demo-unlock-button"),
   distanceNote: $("#distance-note"),
   playerMap: $("#player-map"),
+  adminLoginPanel: $("#admin-login-panel"),
+  adminContent: $("#admin-content"),
+  adminLoginForm: $("#admin-login-form"),
+  adminPasswordInput: $("#admin-password"),
+  adminLoginMessage: $("#admin-login-message"),
+  adminLogoutButton: $("#admin-logout-button"),
   seedButton: $("#seed-button"),
   generateCodeButton: $("#generate-code-button"),
   routeList: $("#route-list"),
@@ -62,7 +76,12 @@ const els = {
   routeDetailsTitleInput: $("#route-details-title"),
   routeDetailsAreaInput: $("#route-details-area"),
   routeDetailsDurationInput: $("#route-details-duration"),
+  routeDetailsPriceInput: $("#route-details-price"),
+  routeDetailsShopVisibleInput: $("#route-details-shop-visible"),
   routeDetailsDescriptionInput: $("#route-details-description"),
+  routeDetailsImageInput: $("#route-details-image"),
+  routeDetailsImagePreview: $("#route-details-image-preview"),
+  removeRouteImageButton: $("#remove-route-image"),
   routeDetailsMessage: $("#route-details-message"),
   routeSelect: $("#route-select"),
   puzzleList: $("#puzzle-list"),
@@ -104,6 +123,8 @@ const els = {
 
 const TILE_SIZE = 256;
 const MAP_ZOOM = 16;
+const MAP_MIN_ZOOM = 3;
+const MAP_PADDING = 56;
 const DEFAULT_CENTER = { lat: 50.29225, lng: 5.55995 };
 
 let selectedGeoPuzzleId = null;
@@ -118,7 +139,12 @@ let serverSyncEnabled = false;
 let serverSaveTimer = null;
 let serverSaveInFlight = false;
 let serverSavePending = false;
+let geolocationWatchId = null;
+let geolocationWatchPuzzleId = null;
 let serverSyncNoticeShown = false;
+let adminAuthenticated = !canUseBackend();
+let adminSessionChecked = false;
+let adminSessionCheckPromise = null;
 
 function createSeedData() {
   const routeId = "route-tramway";
@@ -131,6 +157,8 @@ function createSeedData() {
         area: "Erezée centre",
         duration: 90,
         distance: "3,2 km",
+        pricePerPerson: 18,
+        shopVisible: true,
         description:
           "Un parcours familial entre traces du tramway vicinal, rivière et coeur du village.",
         puzzles: [
@@ -282,6 +310,7 @@ async function syncDataFromServer() {
     const response = await fetch(API_DATA_URL, {
       headers: { Accept: "application/json" },
       cache: "no-store",
+      credentials: "same-origin",
     });
 
     serverSyncEnabled = true;
@@ -340,8 +369,16 @@ async function persistDataToServer() {
     const response = await fetch(API_DATA_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify(data),
     });
+    if (response.status === 403) {
+      adminAuthenticated = false;
+      adminSessionChecked = true;
+      renderAdminAccess();
+      showToast("Connexion gestion requise pour modifier ces données.");
+      return;
+    }
     if (!response.ok) {
       throw new Error("Sauvegarde backend refusée.");
     }
@@ -364,6 +401,105 @@ function flushServerSave() {
   persistDataToServer();
 }
 
+function isAdminRouteActive() {
+  return location.hash.replace("#", "") === "admin";
+}
+
+function renderAdminAccess() {
+  if (!els.adminLoginPanel || !els.adminContent) return;
+  const loginRequired = canUseBackend() && !adminAuthenticated;
+  els.adminLoginPanel.classList.toggle("is-hidden", !loginRequired);
+  els.adminContent.classList.toggle("is-hidden", loginRequired);
+  if (!loginRequired && els.adminLoginMessage) {
+    els.adminLoginMessage.textContent = "";
+  }
+}
+
+async function checkAdminSession(options = {}) {
+  if (!canUseBackend()) {
+    adminAuthenticated = true;
+    adminSessionChecked = true;
+    renderAdminAccess();
+    return true;
+  }
+
+  if (adminSessionCheckPromise && !options.force) {
+    return adminSessionCheckPromise;
+  }
+
+  adminSessionCheckPromise = fetch(ADMIN_SESSION_URL, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    credentials: "same-origin",
+  })
+    .then(async (response) => {
+      const payload = response.ok ? await response.json() : { authenticated: false };
+      adminAuthenticated = Boolean(payload.authenticated);
+      adminSessionChecked = true;
+      renderAdminAccess();
+      return adminAuthenticated;
+    })
+    .catch((error) => {
+      console.warn(error);
+      adminAuthenticated = false;
+      adminSessionChecked = true;
+      renderAdminAccess();
+      return false;
+    })
+    .finally(() => {
+      adminSessionCheckPromise = null;
+    });
+
+  return adminSessionCheckPromise;
+}
+
+async function handleAdminLogin(event) {
+  event.preventDefault();
+  const password = els.adminPasswordInput.value;
+  if (!password) {
+    els.adminLoginMessage.textContent = "Indiquez le mot de passe gestion.";
+    return;
+  }
+
+  try {
+    const response = await fetch(ADMIN_LOGIN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ password }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      els.adminLoginMessage.textContent = payload.message || "Mot de passe incorrect.";
+      return;
+    }
+
+    adminAuthenticated = true;
+    adminSessionChecked = true;
+    els.adminLoginForm.reset();
+    els.adminLoginMessage.textContent = "";
+    renderAdmin();
+    showToast("Accès gestion ouvert.");
+  } catch (error) {
+    console.warn(error);
+    els.adminLoginMessage.textContent = "Connexion impossible pour le moment.";
+  }
+}
+
+async function handleAdminLogout() {
+  if (canUseBackend()) {
+    await fetch(ADMIN_LOGOUT_URL, {
+      method: "POST",
+      credentials: "same-origin",
+    }).catch((error) => console.warn(error));
+  }
+  adminAuthenticated = !canUseBackend();
+  adminSessionChecked = true;
+  renderAdmin();
+  showToast("Accès gestion fermé.");
+}
+
 function createId(prefix) {
   if (crypto?.randomUUID) {
     return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -372,13 +508,19 @@ function createId(prefix) {
 }
 
 function setHashView() {
-  const view = location.hash.replace("#", "") === "admin" ? "admin" : "player";
+  const requestedView = location.hash.replace("#", "");
+  const view = ["shop", "player", "admin"].includes(requestedView) ? requestedView : "shop";
   Object.entries(els.views).forEach(([name, element]) => {
     element.classList.toggle("is-active", name === view);
   });
   els.navLinks.forEach((link) => {
     link.classList.toggle("is-active", link.dataset.route === view);
   });
+  if (view === "admin" && !adminSessionChecked) {
+    checkAdminSession().then(() => {
+      if (isAdminRouteActive()) renderAdmin();
+    });
+  }
   render();
 }
 
@@ -467,6 +609,40 @@ function formatDuration(seconds) {
   return `${minutes} min ${rest.toString().padStart(2, "0")} s`;
 }
 
+function getRoutePrice(route) {
+  if (route && (route.pricePerPerson === undefined || route.pricePerPerson === null)) {
+    return 18;
+  }
+  const price = Number(route?.pricePerPerson);
+  return Number.isFinite(price) && price >= 0 ? price : 0;
+}
+
+function formatPrice(value) {
+  return new Intl.NumberFormat("fr-BE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(getRoutePrice({ pricePerPerson: value }));
+}
+
+function formatCustomerAddress(address) {
+  if (!address) return "";
+  return [
+    address.line1,
+    address.line2,
+    [address.postalCode, address.city].filter(Boolean).join(" "),
+    address.state,
+    address.country,
+  ].filter(Boolean).join(", ");
+}
+
+function isRouteVisibleInShop(route) {
+  return route?.shopVisible !== false;
+}
+
+function getShopRoutes() {
+  return data.routes.filter(isRouteVisibleInShop);
+}
+
 function getPuzzleLat(puzzle) {
   return Number.isFinite(Number(puzzle?.lat)) ? Number(puzzle.lat) : DEFAULT_CENTER.lat;
 }
@@ -514,18 +690,54 @@ function getMapCenter(target, playerPosition) {
   };
 }
 
+function getFittingMapView(target, player, radius, width, height) {
+  if (!player) return { center: target, zoom: MAP_ZOOM };
+
+  const usableWidth = Math.max(120, width - MAP_PADDING * 2);
+  const usableHeight = Math.max(120, height - MAP_PADDING * 2);
+
+  for (let zoom = MAP_ZOOM; zoom >= MAP_MIN_ZOOM; zoom -= 1) {
+    const targetWorld = latLngToWorld(target.lat, target.lng, zoom);
+    const playerWorld = latLngToWorld(player.lat, player.lng, zoom);
+    const radiusPixels = metersToPixels(radius, target.lat, zoom);
+    const minX = Math.min(playerWorld.x, targetWorld.x - radiusPixels);
+    const maxX = Math.max(playerWorld.x, targetWorld.x + radiusPixels);
+    const minY = Math.min(playerWorld.y, targetWorld.y - radiusPixels);
+    const maxY = Math.max(playerWorld.y, targetWorld.y + radiusPixels);
+
+    if (maxX - minX <= usableWidth && maxY - minY <= usableHeight) {
+      return {
+        center: worldToLatLng((minX + maxX) / 2, (minY + maxY) / 2, zoom),
+        zoom,
+      };
+    }
+  }
+
+  const targetWorld = latLngToWorld(target.lat, target.lng, MAP_MIN_ZOOM);
+  const playerWorld = latLngToWorld(player.lat, player.lng, MAP_MIN_ZOOM);
+  return {
+    center: worldToLatLng((targetWorld.x + playerWorld.x) / 2, (targetWorld.y + playerWorld.y) / 2, MAP_MIN_ZOOM),
+    zoom: MAP_MIN_ZOOM,
+  };
+}
+
 function renderTileMap(container, options) {
   if (!container) return;
   const rect = container.getBoundingClientRect();
   const width = Math.max(Math.round(rect.width), 320);
   const height = Math.max(Math.round(rect.height), 180);
-  const center = options.center || DEFAULT_CENTER;
-  const target = options.target || center;
+  const target = options.target || options.center || DEFAULT_CENTER;
   const radius = Number(options.radius || 120);
   const player = options.player || null;
+  const view = options.fitToPlayer
+    ? getFittingMapView(target, player, radius, width, height)
+    : { center: options.center || target, zoom: options.zoom || MAP_ZOOM };
+  const center = view.center;
+  const zoom = view.zoom;
   const renderKey = JSON.stringify({
     w: width,
     h: height,
+    zoom,
     center: [center.lat.toFixed(5), center.lng.toFixed(5)],
     target: [target.lat.toFixed(5), target.lng.toFixed(5)],
     radius: Math.round(radius),
@@ -538,7 +750,7 @@ function renderTileMap(container, options) {
 
   const tiles = container.querySelector(".map-tiles");
   const layer = container.querySelector(".map-layer");
-  const centerWorld = latLngToWorld(center.lat, center.lng);
+  const centerWorld = latLngToWorld(center.lat, center.lng, zoom);
   const topLeft = {
     x: centerWorld.x - width / 2,
     y: centerWorld.y - height / 2,
@@ -547,7 +759,7 @@ function renderTileMap(container, options) {
   const startY = Math.floor(topLeft.y / TILE_SIZE);
   const endX = Math.floor((topLeft.x + width) / TILE_SIZE);
   const endY = Math.floor((topLeft.y + height) / TILE_SIZE);
-  const maxTile = 2 ** MAP_ZOOM;
+  const maxTile = 2 ** zoom;
   const tileMarkup = [];
 
   for (let x = startX; x <= endX; x += 1) {
@@ -555,13 +767,13 @@ function renderTileMap(container, options) {
       if (y < 0 || y >= maxTile) continue;
       const wrappedX = ((x % maxTile) + maxTile) % maxTile;
       tileMarkup.push(
-        `<img class="map-tile" alt="" src="https://tile.openstreetmap.org/${MAP_ZOOM}/${wrappedX}/${y}.png" style="left:${Math.round(x * TILE_SIZE - topLeft.x)}px;top:${Math.round(y * TILE_SIZE - topLeft.y)}px" />`,
+        `<img class="map-tile" alt="" src="https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png" style="left:${Math.round(x * TILE_SIZE - topLeft.x)}px;top:${Math.round(y * TILE_SIZE - topLeft.y)}px" />`,
       );
     }
   }
 
   const pointFor = (point) => {
-    const world = latLngToWorld(point.lat, point.lng);
+    const world = latLngToWorld(point.lat, point.lng, zoom);
     return {
       x: world.x - topLeft.x,
       y: world.y - topLeft.y,
@@ -569,7 +781,7 @@ function renderTileMap(container, options) {
   };
 
   const targetPoint = pointFor(target);
-  const radiusPixels = metersToPixels(radius, target.lat);
+  const radiusPixels = metersToPixels(radius, target.lat, zoom);
   const overlay = [
     `<span class="map-zone" style="left:${targetPoint.x}px;top:${targetPoint.y}px;width:${radiusPixels * 2}px;height:${radiusPixels * 2}px"></span>`,
   ];
@@ -604,6 +816,10 @@ function normalizeAnswer(value) {
 
 function getPuzzleImage(puzzle) {
   return puzzle?.image?.dataUrl ? puzzle.image : null;
+}
+
+function getRouteCoverImage(route) {
+  return route?.coverImage?.dataUrl ? route.coverImage : null;
 }
 
 function preparePuzzleImage(file) {
@@ -645,6 +861,10 @@ function preparePuzzleImage(file) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+function prepareRouteCoverImage(file) {
+  return preparePuzzleImage(file);
 }
 
 function ensureTeamState(team) {
@@ -690,15 +910,118 @@ function render() {
   renderAdmin();
 }
 
+function renderShop() {
+  if (!els.shopList || !els.shopEmpty) return;
+  const routes = getShopRoutes();
+  els.shopEmpty.textContent = routes.length
+    ? ""
+    : "Aucun parcours n’est ouvert à la vente pour le moment.";
+  els.shopList.innerHTML = routes
+    .map((route) => {
+      const price = getRoutePrice(route);
+      const total = price * 2;
+      const coverImage = getRouteCoverImage(route);
+      return `
+        <article class="shop-route-card">
+          <div class="shop-route-visual ${coverImage ? "has-image" : ""}" aria-hidden="true">
+            ${coverImage ? `<img src="${escapeHtml(coverImage.dataUrl)}" alt="" />` : ""}
+            <span>${escapeHtml(route.area || "Erezée")}</span>
+            <strong>${route.duration || 90} min</strong>
+          </div>
+          <div class="shop-route-copy">
+            <span class="shop-badge">${escapeHtml(route.area || "Erezée")}</span>
+            <h3>${escapeHtml(route.title)}</h3>
+            <p>${escapeHtml(route.description || "Parcours extérieur à Erezée.")}</p>
+            <div class="metric-strip">
+              <span class="metric">${route.duration || 90} min</span>
+              <span class="metric">${route.puzzles?.length || 0} énigmes</span>
+              <span class="metric">${formatPrice(price)} / personne</span>
+            </div>
+          </div>
+          <form class="shop-buy-form" data-shop-route="${escapeHtml(route.id)}">
+            <label>
+              Participants
+              <input name="players" type="number" min="1" max="20" value="2" data-shop-player-count="${escapeHtml(route.id)}" />
+            </label>
+            <strong data-shop-total="${escapeHtml(route.id)}">${formatPrice(total)}</strong>
+            <button class="primary-button full-button" type="submit">Acheter</button>
+            <p class="form-message" data-shop-message="${escapeHtml(route.id)}"></p>
+          </form>
+        </article>
+      `;
+    })
+    .join("");
+
+  $$("[data-shop-player-count]").forEach((input) => {
+    input.addEventListener("input", updateShopTotal);
+    input.addEventListener("change", updateShopTotal);
+  });
+  $$("[data-shop-route]").forEach((form) => {
+    form.addEventListener("submit", startCheckout);
+  });
+}
+
+function updateShopTotal(event) {
+  const routeId = event.currentTarget.dataset.shopPlayerCount;
+  const route = getRoute(routeId);
+  if (!route) return;
+  const players = Math.min(20, Math.max(1, Number(event.currentTarget.value) || 1));
+  event.currentTarget.value = String(players);
+  const total = els.shopList.querySelector(`[data-shop-total="${routeId}"]`);
+  if (total) total.textContent = formatPrice(getRoutePrice(route) * players);
+}
+
+async function startCheckout(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const routeId = form.dataset.shopRoute;
+  const route = getRoute(routeId);
+  const message = form.querySelector(`[data-shop-message="${routeId}"]`);
+  const players = Math.min(20, Math.max(1, Number(new FormData(form).get("players")) || 1));
+  if (!route || !isRouteVisibleInShop(route)) {
+    if (message) message.textContent = "Ce parcours n’est pas disponible à la vente.";
+    return;
+  }
+  if (!canUseBackend()) {
+    if (message) message.textContent = "Le paiement sera disponible sur le site en ligne.";
+    return;
+  }
+
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.disabled = true;
+  if (message) message.textContent = "Préparation du paiement sécurisé…";
+
+  try {
+    const response = await fetch(API_CHECKOUT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ routeId, playerCount: players }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.url) {
+      throw new Error(payload.message || "Paiement indisponible pour le moment.");
+    }
+    window.location.href = payload.url;
+  } catch (error) {
+    if (message) message.textContent = error.message || "Paiement indisponible pour le moment.";
+    if (button) button.disabled = false;
+  }
+}
+
 function renderPlayer() {
   const team = getCurrentTeam();
   const route = team ? getRoute(team.routeId) : null;
 
+  renderShop();
   els.resetSessionButton.style.display = team ? "inline-flex" : "none";
   els.loginPanel.classList.toggle("is-hidden", Boolean(team));
   els.gamePanel.classList.toggle("is-hidden", !team);
 
-  if (!team || !route) return;
+  if (!team || !route) {
+    stopGeolocationWatch();
+    return;
+  }
 
   ensureTeamState(team);
   checkGameStatus(team, route);
@@ -727,13 +1050,22 @@ function renderPlayer() {
   els.riddleCard.classList.toggle("is-hidden", gameFinished);
 
   if (gameFinished) {
+    stopGeolocationWatch();
     renderFinishPanel(team, route);
     return;
   }
 
-  if (!currentPuzzle) return;
+  if (!currentPuzzle) {
+    stopGeolocationWatch();
+    return;
+  }
 
   const unlocked = !currentPuzzle.requireLocation || team.unlockedPuzzleIds.includes(currentPuzzle.id);
+  if (!currentPuzzle.requireLocation) {
+    stopGeolocationWatch();
+  } else if (geolocationWatchId !== null) {
+    geolocationWatchPuzzleId = currentPuzzle.id;
+  }
   renderPlayerMap(team, currentPuzzle);
   els.stepNumber.textContent = String(Math.max(currentIndex + 1, 1));
   els.stepPlace.textContent = currentPuzzle.place;
@@ -806,10 +1138,10 @@ function renderPlayerMap(team, puzzle) {
   };
   const playerPosition = team.lastPosition || null;
   renderTileMap(els.playerMap, {
-    center: getMapCenter(target, playerPosition),
     target,
     radius: getPuzzleRadius(puzzle),
     player: playerPosition,
+    fitToPlayer: true,
     editable: false,
   });
 }
@@ -1001,6 +1333,68 @@ function unlockPuzzle(team, puzzle, message) {
   renderPlayer();
 }
 
+function stopGeolocationWatch() {
+  if (geolocationWatchId === null || !navigator.geolocation) return;
+  navigator.geolocation.clearWatch(geolocationWatchId);
+  geolocationWatchId = null;
+  geolocationWatchPuzzleId = null;
+}
+
+function handleGeolocationPosition(position) {
+  const team = getCurrentTeam();
+  if (!team || team.status !== "playing") {
+    stopGeolocationWatch();
+    return;
+  }
+
+  const route = getRoute(team.routeId);
+  const puzzle = getCurrentPuzzle(team, route);
+  if (!route || !puzzle) {
+    stopGeolocationWatch();
+    return;
+  }
+
+  team.lastPosition = {
+    lat: position.coords.latitude,
+    lng: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    at: Date.now(),
+  };
+
+  if (!puzzle.requireLocation) {
+    saveData();
+    renderPlayerMap(team, puzzle);
+    return;
+  }
+
+  geolocationWatchPuzzleId = puzzle.id;
+  const distance = distanceInMeters(
+    position.coords.latitude,
+    position.coords.longitude,
+    getPuzzleLat(puzzle),
+    getPuzzleLng(puzzle),
+  );
+  const radius = getPuzzleRadius(puzzle);
+  const accuracy = Number(position.coords.accuracy);
+  const accuracyText = Number.isFinite(accuracy) ? ` Précision ±${Math.round(accuracy)} m.` : "";
+
+  if (distance <= radius && !team.unlockedPuzzleIds.includes(puzzle.id)) {
+    unlockPuzzle(team, puzzle, `Vous êtes à ${Math.round(distance)} m du point.${accuracyText}`);
+    return;
+  }
+
+  saveData();
+  renderPlayerMap(team, puzzle);
+  els.distanceNote.textContent =
+    distance <= radius
+      ? `Vous êtes dans la zone.${accuracyText}`
+      : `Position mise à jour : encore ${Math.round(distance - radius)} m avant la zone.${accuracyText}`;
+}
+
+function handleGeolocationError() {
+  els.distanceNote.textContent = "Position non disponible. Vérifiez l’autorisation GPS puis réessayez.";
+}
+
 function locatePlayer() {
   const team = getCurrentTeam();
   if (!team) return;
@@ -1016,35 +1410,18 @@ function locatePlayer() {
     return;
   }
 
-  els.distanceNote.textContent = "Recherche de votre position...";
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      team.lastPosition = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        at: Date.now(),
-      };
-      const distance = distanceInMeters(
-        position.coords.latitude,
-        position.coords.longitude,
-        getPuzzleLat(puzzle),
-        getPuzzleLng(puzzle),
-      );
-      const radius = getPuzzleRadius(puzzle);
+  if (geolocationWatchId !== null && geolocationWatchPuzzleId === puzzle.id) {
+    els.distanceNote.textContent = "Suivi GPS déjà actif. La carte se met à jour automatiquement.";
+    return;
+  }
 
-      if (distance <= radius) {
-        unlockPuzzle(team, puzzle, `Vous êtes à ${Math.round(distance)} m du point.`);
-      } else {
-        saveData();
-        renderPlayerMap(team, puzzle);
-        els.distanceNote.textContent = `Encore ${Math.round(distance - radius)} m avant la zone.`;
-      }
-    },
-    () => {
-      els.distanceNote.textContent = "Position non disponible. Réessayez près du lieu.";
-    },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 9000 },
+  stopGeolocationWatch();
+  els.distanceNote.textContent = "Suivi GPS activé. La carte va se mettre à jour automatiquement.";
+  geolocationWatchPuzzleId = puzzle.id;
+  geolocationWatchId = navigator.geolocation.watchPosition(
+    handleGeolocationPosition,
+    handleGeolocationError,
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
   );
 }
 
@@ -1103,6 +1480,7 @@ function handleActivation(event) {
 }
 
 function resetSession() {
+  stopGeolocationWatch();
   localStorage.removeItem(SESSION_KEY);
   renderPlayer();
   showToast("Code déconnecté.");
@@ -1135,6 +1513,9 @@ function saveTeamName(event) {
 }
 
 function renderAdmin() {
+  renderAdminAccess();
+  if (canUseBackend() && !adminAuthenticated) return;
+
   const activeRoute = getActiveRoute();
   if (!activeRoute) return;
 
@@ -1143,6 +1524,7 @@ function renderAdmin() {
     .map((route) => {
       const teams = data.teams.filter((team) => team.routeId === route.id);
       const active = route.id === activeRoute.id;
+      const visible = isRouteVisibleInShop(route);
       return `
         <article class="route-card">
           <div>
@@ -1151,6 +1533,8 @@ function renderAdmin() {
             <div class="metric-strip">
               <span class="metric">${escapeHtml(route.area)}</span>
               <span class="metric">${route.duration} min</span>
+              <span class="metric">${formatPrice(getRoutePrice(route))} / pers.</span>
+              <span class="metric ${visible ? "is-success" : "is-muted"}">${visible ? "Boutique visible" : "Boutique masquée"}</span>
               <span class="metric">${route.puzzles.length} énigmes</span>
               <span class="metric">${teams.length} équipe${teams.length > 1 ? "s" : ""}</span>
             </div>
@@ -1200,13 +1584,19 @@ function renderRouteDetailsEditor(route) {
     els.routeDetailsTitleInput,
     els.routeDetailsAreaInput,
     els.routeDetailsDurationInput,
+    els.routeDetailsPriceInput,
+    els.routeDetailsShopVisibleInput,
     els.routeDetailsDescriptionInput,
   ];
   if (activeRouteDetailFields.includes(document.activeElement)) return;
   els.routeDetailsTitleInput.value = route.title || "";
   els.routeDetailsAreaInput.value = route.area || "";
   els.routeDetailsDurationInput.value = String(route.duration || 90);
+  els.routeDetailsPriceInput.value = String(getRoutePrice(route));
+  els.routeDetailsShopVisibleInput.checked = isRouteVisibleInShop(route);
   els.routeDetailsDescriptionInput.value = route.description || "";
+  els.routeDetailsImageInput.value = "";
+  renderRouteCoverPreview(route);
   els.routeDetailsMessage.textContent = `Modification de "${route.title}".`;
 }
 
@@ -1216,9 +1606,12 @@ function updateRouteDetailsDraft() {
   route.title = els.routeDetailsTitleInput.value.trim();
   route.area = els.routeDetailsAreaInput.value.trim();
   route.duration = Math.max(1, Number(els.routeDetailsDurationInput.value) || 90);
+  route.pricePerPerson = Math.max(0, Number(els.routeDetailsPriceInput.value) || 0);
+  route.shopVisible = els.routeDetailsShopVisibleInput.checked;
   route.description = els.routeDetailsDescriptionInput.value.trim();
   saveData();
   refreshRouteDetailsPreview(route);
+  renderShop();
   renderPlayer();
 }
 
@@ -1233,10 +1626,37 @@ function refreshRouteDetailsPreview(route) {
     if (description) description.textContent = route.description || route.area;
     if (metrics[0]) metrics[0].textContent = route.area;
     if (metrics[1]) metrics[1].textContent = `${route.duration} min`;
+    if (metrics[2]) metrics[2].textContent = `${formatPrice(getRoutePrice(route))} / pers.`;
+    if (metrics[3]) {
+      metrics[3].textContent = isRouteVisibleInShop(route) ? "Boutique visible" : "Boutique masquée";
+      metrics[3].classList.toggle("is-success", isRouteVisibleInShop(route));
+      metrics[3].classList.toggle("is-muted", !isRouteVisibleInShop(route));
+    }
   }
 
   const activeOption = els.routeSelect.querySelector(`option[value="${route.id}"]`);
   if (activeOption) activeOption.textContent = route.title;
+}
+
+function renderRouteCoverPreview(route) {
+  const image = getRouteCoverImage(route);
+  els.removeRouteImageButton.disabled = !image;
+  if (!image) {
+    els.routeDetailsImagePreview.classList.add("is-empty");
+    els.routeDetailsImagePreview.textContent = "Aucune image de boutique ajoutée.";
+    return;
+  }
+
+  els.routeDetailsImagePreview.classList.remove("is-empty");
+  els.routeDetailsImagePreview.innerHTML = `
+    <button class="image-preview-button" type="button" data-view-route-image aria-label="Agrandir l’image de boutique">
+      <img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.name || route.title)}" />
+    </button>
+    <span>${escapeHtml(image.name || "Image de boutique")}</span>
+  `;
+  els.routeDetailsImagePreview.querySelector("[data-view-route-image]")?.addEventListener("click", () => {
+    openImageViewer(image, route.title || "Image de boutique");
+  });
 }
 
 function saveRouteDetails(event) {
@@ -1251,6 +1671,38 @@ function saveRouteDetails(event) {
   renderAdmin();
   renderPlayer();
   showToast("Parcours enregistré.");
+}
+
+async function updateRouteCoverFromFile(event) {
+  const route = getActiveRoute();
+  const file = event.currentTarget.files?.[0];
+  if (!route || !file) return;
+
+  els.routeDetailsMessage.textContent = "Image de boutique en cours d’ajout...";
+  try {
+    route.coverImage = await prepareRouteCoverImage(file);
+    saveData();
+    renderRouteCoverPreview(route);
+    renderShop();
+    els.routeDetailsMessage.textContent = "Image de boutique enregistrée.";
+    showToast("Image ajoutée à la boutique.");
+  } catch (error) {
+    els.routeDetailsMessage.textContent = error?.message || "L’image n’a pas pu être ajoutée.";
+  } finally {
+    els.routeDetailsImageInput.value = "";
+  }
+}
+
+function removeRouteCoverImage() {
+  const route = getActiveRoute();
+  if (!route) return;
+
+  delete route.coverImage;
+  saveData();
+  renderRouteCoverPreview(route);
+  renderShop();
+  els.routeDetailsMessage.textContent = "Image de boutique supprimée.";
+  showToast("Image de boutique supprimée.");
 }
 
 function getSelectedContentPuzzle(route) {
@@ -1673,10 +2125,28 @@ function renderCodeList() {
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((code) => {
       const route = getRoute(code.routeId);
+      const customerName = code.customerName || [code.customerFirstName, code.customerLastName].filter(Boolean).join(" ");
+      const customerAddress = formatCustomerAddress(code.customerAddress);
+      const customerDetails = [
+        customerName ? `Client : ${customerName}` : "",
+        code.customerEmail ? `E-mail : ${code.customerEmail}` : "",
+        customerAddress ? `Adresse : ${customerAddress}` : "",
+      ].filter(Boolean);
+      const mailStatus = code.source === "stripe"
+        ? code.confirmationEmailSentAt
+          ? "Mail envoyé"
+          : code.confirmationEmailStatus === "error"
+            ? "Mail non envoyé"
+            : code.confirmationEmailStatus === "missing_email"
+              ? "E-mail manquant"
+              : "Mail en attente"
+        : "";
       return `
         <article class="code-row">
           <div>
             <strong>${escapeHtml(code.code)}</strong>
+            ${customerDetails.length ? `<p class="code-customer">${customerDetails.map(escapeHtml).join(" · ")}</p>` : ""}
+            ${mailStatus ? `<p class="code-mail-status">${escapeHtml(mailStatus)}</p>` : ""}
             <p>${escapeHtml(route?.title || "Parcours supprimé")} · ${code.status === "used" ? "utilisé" : "disponible"}</p>
           </div>
           <div class="code-actions">
@@ -1713,18 +2183,31 @@ function deleteUsedCode(codeValue) {
   showToast("Code utilisé supprimé.");
 }
 
-function createRoute(event) {
+async function createRoute(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  const imageFile = form.get("cover-image");
   const route = {
     id: createId("route"),
     title: String(form.get("title")).trim(),
     area: String(form.get("area")).trim(),
     duration: Number(form.get("duration")) || 90,
     distance: "À définir",
+    pricePerPerson: Math.max(0, Number(form.get("price")) || 0),
+    shopVisible: form.get("shop-visible") === "on",
     description: String(form.get("description")).trim(),
     puzzles: [],
   };
+
+  if (imageFile?.size) {
+    try {
+      route.coverImage = await prepareRouteCoverImage(imageFile);
+    } catch (error) {
+      showToast(error?.message || "L’image n’a pas pu être ajoutée.");
+      return;
+    }
+  }
+
   data.routes.push(route);
   setActiveRoute(route.id);
   event.currentTarget.reset();
@@ -1826,6 +2309,66 @@ async function copyCode(code) {
   }
 }
 
+async function handleCheckoutReturn() {
+  if (!canUseBackend()) return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("checkout") === "cancel") {
+    showToast("Paiement annulé.");
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash || "#player"}`);
+    return;
+  }
+  if (params.get("checkout") !== "success") return;
+  const sessionId = params.get("session_id");
+  if (!sessionId) return;
+
+  try {
+    els.activationMessage.textContent = "Récupération de votre code d’activation…";
+    const response = await fetch(`${API_CHECKOUT_SESSION_URL}?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.activationCode) {
+      throw new Error(payload.message || "Le code n’est pas encore disponible.");
+    }
+
+    if (!data.codes.some((item) => item.code === payload.activationCode)) {
+      data.codes.unshift({
+        code: payload.activationCode,
+        routeId: payload.routeId,
+        status: "available",
+        teamId: null,
+        createdAt: Date.now(),
+        source: "stripe",
+        stripeSessionId: sessionId,
+        customerEmail: payload.customerEmail || null,
+        customerName: payload.customerName || null,
+        customerFirstName: payload.customerFirstName || null,
+        customerLastName: payload.customerLastName || null,
+        customerAddress: payload.customerAddress || null,
+        playerCount: payload.playerCount || null,
+        confirmationEmailSentAt: payload.emailSent ? Date.now() : null,
+      });
+      saveData({ sync: false });
+    }
+
+    renderPlayer();
+    els.activationCode.value = payload.activationCode;
+    const mailInfo = payload.emailSent
+      ? " Un e-mail de confirmation vient aussi d’être envoyé."
+      : payload.emailConfigured === false
+        ? " L’e-mail de confirmation sera actif dès que l’envoi mail sera configuré."
+        : "";
+    els.activationMessage.textContent = `Code créé : ${payload.activationCode}. Vous pouvez le valider pour démarrer.${mailInfo}`;
+    showToast(payload.emailSent ? "Paiement validé, code envoyé par e-mail." : "Paiement validé, code créé.");
+  } catch (error) {
+    els.activationMessage.textContent = error.message || "Impossible de récupérer le code.";
+  } finally {
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash || "#player"}`);
+  }
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -1837,7 +2380,10 @@ function escapeHtml(value) {
 
 function bindEvents() {
   window.addEventListener("hashchange", setHashView);
-  window.addEventListener("beforeunload", flushServerSave);
+  window.addEventListener("beforeunload", () => {
+    stopGeolocationWatch();
+    flushServerSave();
+  });
   els.activationForm.addEventListener("submit", handleActivation);
   els.resetSessionButton.addEventListener("click", resetSession);
   els.editTeamButton.addEventListener("click", openTeamNameEditor);
@@ -1845,6 +2391,8 @@ function bindEvents() {
   els.hintButton.addEventListener("click", requestHint);
   els.locateButton.addEventListener("click", locatePlayer);
   els.demoUnlockButton.addEventListener("click", unlockCurrentPuzzleByDemo);
+  els.adminLoginForm.addEventListener("submit", handleAdminLogin);
+  els.adminLogoutButton.addEventListener("click", handleAdminLogout);
   els.seedButton.addEventListener("click", resetSeed);
   els.generateCodeButton.addEventListener("click", generateCode);
   els.routeForm.addEventListener("submit", createRoute);
@@ -1856,11 +2404,15 @@ function bindEvents() {
     els.routeDetailsTitleInput,
     els.routeDetailsAreaInput,
     els.routeDetailsDurationInput,
+    els.routeDetailsPriceInput,
+    els.routeDetailsShopVisibleInput,
     els.routeDetailsDescriptionInput,
   ].forEach((field) => {
     field.addEventListener("input", updateRouteDetailsDraft);
     field.addEventListener("change", updateRouteDetailsDraft);
   });
+  els.routeDetailsImageInput.addEventListener("change", updateRouteCoverFromFile);
+  els.removeRouteImageButton.addEventListener("click", removeRouteCoverImage);
   els.puzzleForm.addEventListener("submit", createPuzzle);
   els.puzzleContentForm.addEventListener("submit", savePuzzleContent);
   const contentSaveButton = els.puzzleContentForm.querySelector("button[type='submit']");
@@ -1934,4 +2486,4 @@ bindEvents();
 setHashView();
 startTicker();
 registerServiceWorker();
-syncDataFromServer();
+syncDataFromServer().finally(handleCheckoutReturn);

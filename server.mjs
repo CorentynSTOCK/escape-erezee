@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { readFile, rename, stat, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,12 @@ const DATA_FILE = path.join(DATA_DIR, "escape-data.json");
 const MAX_BODY_SIZE = 30 * 1024 * 1024;
 const ADMIN_PASSWORD = globalThis.process?.env?.ADMIN_PASSWORD || "ErezeeGestion-2026!";
 const ODOO_WEBHOOK_SECRET = globalThis.process?.env?.ODOO_WEBHOOK_SECRET || "";
+const STRIPE_SECRET_KEY = globalThis.process?.env?.STRIPE_SECRET_KEY || "";
+const STRIPE_WEBHOOK_SECRET = globalThis.process?.env?.STRIPE_WEBHOOK_SECRET || "";
+const RESEND_API_KEY = globalThis.process?.env?.RESEND_API_KEY || "";
+const MAIL_FROM = globalThis.process?.env?.MAIL_FROM || "";
+const MAIL_REPLY_TO = globalThis.process?.env?.MAIL_REPLY_TO || "";
+const PUBLIC_APP_URL = globalThis.process?.env?.PUBLIC_APP_URL || "https://escape-erezee.be";
 const ADMIN_COOKIE_NAME = "escape_erezee_admin";
 const ADMIN_SESSION_MAX_AGE = 12 * 60 * 60;
 const ADMIN_SESSION_TOKEN = createHash("sha256")
@@ -163,12 +169,129 @@ function getFirstText(...values) {
   return values.map(compactText).find(Boolean) || "";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function normalizeLookupValue(value) {
   return compactText(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/gi, "")
     .toLowerCase();
+}
+
+function getRequestOrigin(request) {
+  const forwardedProto = compactText(request.headers["x-forwarded-proto"]).split(",")[0].trim();
+  const proto = forwardedProto || (request.socket?.encrypted ? "https" : "http");
+  const host = compactText(request.headers["x-forwarded-host"]).split(",")[0].trim()
+    || compactText(request.headers.host)
+    || "localhost";
+  return `${proto}://${host}`;
+}
+
+function getRoutePriceCents(route) {
+  if (route && (route.pricePerPerson === undefined || route.pricePerPerson === null)) {
+    return 1800;
+  }
+  const price = Number(route?.pricePerPerson);
+  if (!Number.isFinite(price) || price < 0) return 0;
+  return Math.round(price * 100);
+}
+
+function isRouteVisibleInShop(route) {
+  return route?.shopVisible !== false;
+}
+
+function getPlayerCount(value) {
+  const count = Number(value);
+  if (!Number.isFinite(count)) return 1;
+  return Math.min(20, Math.max(1, Math.floor(count)));
+}
+
+function appendStripeParam(params, key, value) {
+  if (value === undefined || value === null) return;
+  params.append(key, String(value));
+}
+
+async function stripeRequest(method, endpoint, params = null) {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error("Stripe n'est pas encore configure.");
+  }
+
+  const options = {
+    method,
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      "Stripe-Version": "2026-02-25.clover",
+    },
+  };
+
+  if (params) {
+    options.headers["Content-Type"] = "application/x-www-form-urlencoded";
+    options.body = params.toString();
+  }
+
+  const response = await fetch(`https://api.stripe.com${endpoint}`, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Stripe n'a pas accepte la demande.");
+  }
+  return payload;
+}
+
+async function sendResendEmail({ to, subject, text, html }) {
+  if (!RESEND_API_KEY || !MAIL_FROM) {
+    return { configured: false, sent: false, provider: "resend" };
+  }
+
+  const body = {
+    from: MAIL_FROM,
+    to: [to],
+    subject,
+    text,
+    html,
+  };
+  if (MAIL_REPLY_TO) {
+    body.reply_to = MAIL_REPLY_TO;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || "L'e-mail n'a pas pu etre envoye.");
+  }
+  return { configured: true, sent: true, provider: "resend", id: payload.id || null };
+}
+
+function verifyStripeSignature(rawBody, signatureHeader) {
+  if (!STRIPE_WEBHOOK_SECRET) return false;
+  const parts = String(signatureHeader || "").split(",").map((part) => part.trim());
+  const timestamp = parts.find((part) => part.startsWith("t="))?.slice(2);
+  const signatures = parts
+    .filter((part) => part.startsWith("v1="))
+    .map((part) => part.slice(3));
+  if (!timestamp || !signatures.length) return false;
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > 300) return false;
+
+  const expected = createHmac("sha256", STRIPE_WEBHOOK_SECRET)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  return signatures.some((signature) => safeCompare(signature, expected));
 }
 
 function getOdooSecret(request, payload) {
@@ -312,17 +435,260 @@ function createOdooCode(data, route, payload) {
   return activationCode;
 }
 
-function buildActivationMailBody(code, route) {
+function findExistingStripeCode(data, sessionId) {
+  return data.codes.find((item) => (
+    item.source === "stripe"
+      && compactText(item.stripeSessionId) === compactText(sessionId)
+  )) || null;
+}
+
+function getStripeCustomField(session, key) {
+  const field = Array.isArray(session?.custom_fields)
+    ? session.custom_fields.find((item) => item?.key === key)
+    : null;
+  return getFirstText(field?.text?.value, field?.numeric?.value, field?.dropdown?.value) || null;
+}
+
+function normalizeStripeAddress(address) {
+  if (!address || typeof address !== "object") return null;
+  const normalized = {
+    line1: getFirstText(address.line1) || null,
+    line2: getFirstText(address.line2) || null,
+    postalCode: getFirstText(address.postal_code, address.postalCode) || null,
+    city: getFirstText(address.city) || null,
+    state: getFirstText(address.state) || null,
+    country: getFirstText(address.country) || null,
+  };
+  return Object.values(normalized).some(Boolean) ? normalized : null;
+}
+
+function formatCustomerAddress(address) {
+  if (!address) return "";
   return [
-    "Bonjour,",
+    address.line1,
+    address.line2,
+    [address.postalCode, address.city].filter(Boolean).join(" "),
+    address.state,
+    address.country,
+  ].filter(Boolean).join("\n");
+}
+
+function getStripeCustomerInfo(session) {
+  const customerDetails = session?.customer_details && typeof session.customer_details === "object"
+    ? session.customer_details
+    : {};
+  const firstName = getStripeCustomField(session, "prenom");
+  const lastName = getStripeCustomField(session, "nom");
+  const fallbackName = getFirstText(customerDetails.individual_name, customerDetails.name);
+  const fullName = [firstName, lastName].filter(Boolean).join(" ") || fallbackName || null;
+
+  return {
+    email: getFirstText(session.customer_email, customerDetails.email) || null,
+    name: fullName,
+    firstName,
+    lastName,
+    phone: getFirstText(customerDetails.phone) || null,
+    address: normalizeStripeAddress(customerDetails.address),
+    stripeCustomerId: compactText(session.customer) || null,
+  };
+}
+
+function createStripeCode(data, route, session) {
+  const customer = getStripeCustomerInfo(session);
+  const activationCode = {
+    code: makeActivationCode(route, data),
+    routeId: route.id,
+    status: "available",
+    teamId: null,
+    createdAt: Date.now(),
+    source: "stripe",
+    stripeSessionId: session.id || null,
+    stripePaymentIntentId: session.payment_intent || null,
+    stripeCustomerId: customer.stripeCustomerId,
+    customerEmail: customer.email,
+    customerName: customer.name,
+    customerFirstName: customer.firstName,
+    customerLastName: customer.lastName,
+    customerPhone: customer.phone,
+    customerAddress: customer.address,
+    playerCount: getPlayerCount(session?.metadata?.playerCount),
+  };
+  data.codes.unshift(activationCode);
+  return activationCode;
+}
+
+async function createOrReuseStripeCode(session) {
+  const result = await withDataMutation(async () => {
+    const stored = await readStoredData();
+    if (!stored) {
+      return { status: 409, payload: { message: "Aucune donnee serveur disponible." } };
+    }
+
+    const routeId = compactText(session?.metadata?.routeId || session?.client_reference_id);
+    const route = stored.routes.find((item) => item.id === routeId);
+    if (!route) {
+      return { status: 400, payload: { message: "Parcours introuvable pour ce paiement." } };
+    }
+
+    const existing = findExistingStripeCode(stored, session.id);
+    const activationCode = existing || createStripeCode(stored, route, session);
+    if (!existing) {
+      await writeStoredData(stored);
+    }
+
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        reused: Boolean(existing),
+        code: activationCode.code,
+        activationCode: activationCode.code,
+        routeId: route.id,
+        routeTitle: route.title,
+        stripeSessionId: session.id,
+        customerEmail: activationCode.customerEmail,
+        customerName: activationCode.customerName,
+        customerFirstName: activationCode.customerFirstName,
+        customerLastName: activationCode.customerLastName,
+        customerAddress: activationCode.customerAddress,
+        playerCount: activationCode.playerCount,
+        emailSubject: "Votre code Escape Erezee",
+        emailBody: buildActivationMailBody(activationCode.code, route, activationCode),
+        emailSent: Boolean(activationCode.confirmationEmailSentAt),
+      },
+    };
+  });
+
+  if (result.status === 200) {
+    const mailResult = await sendConfirmationEmailForCode(result.payload.activationCode);
+    result.payload.emailSent = Boolean(mailResult.sent || result.payload.emailSent);
+    result.payload.emailConfigured = Boolean(mailResult.configured);
+  }
+
+  return result;
+}
+
+function buildActivationMailBody(code, route, customer = {}) {
+  const greetingName = getFirstText(customer.customerFirstName, customer.customerName);
+  return [
+    greetingName ? `Bonjour ${greetingName},` : "Bonjour,",
     "",
     `Merci pour votre achat du parcours ${route.title}.`,
     `Votre code d'activation est : ${code}`,
     "",
-    "Vous pouvez demarrer la partie ici : https://escape-erezee.be/index.html#player",
+    "Informations de votre reservation :",
+    `- Parcours : ${route.title}`,
+    customer.playerCount ? `- Participants : ${customer.playerCount}` : null,
+    customer.customerName ? `- Nom : ${customer.customerName}` : null,
+    customer.customerEmail ? `- E-mail : ${customer.customerEmail}` : null,
+    customer.customerAddress ? `- Adresse : ${formatCustomerAddress(customer.customerAddress).replace(/\n/g, ", ")}` : null,
+    "",
+    `Vous pouvez demarrer la partie ici : ${PUBLIC_APP_URL}/index.html#player`,
     "",
     "Bonne aventure !",
-  ].join("\n");
+  ].filter((line) => line !== null).join("\n");
+}
+
+function buildActivationMailHtml(code, route, customer = {}) {
+  const address = formatCustomerAddress(customer.customerAddress);
+  const addressHtml = address
+    ? address.split("\n").map((line) => escapeHtml(line)).join("<br>")
+    : "";
+  const rows = [
+    ["Parcours", route.title],
+    customer.playerCount ? ["Participants", customer.playerCount] : null,
+    customer.customerName ? ["Nom", customer.customerName] : null,
+    customer.customerEmail ? ["E-mail", customer.customerEmail] : null,
+    addressHtml ? ["Adresse", addressHtml, true] : null,
+  ].filter(Boolean);
+
+  return `
+    <div style="font-family:Arial,sans-serif;color:#123c32;line-height:1.5">
+      <h1 style="margin:0 0 12px">Votre code Escape Erezée</h1>
+      <p>Merci pour votre achat du parcours <strong>${escapeHtml(route.title)}</strong>.</p>
+      <p style="font-size:20px">Votre code d'activation : <strong>${escapeHtml(code)}</strong></p>
+      <table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+        ${rows.map(([label, value, isHtml]) => `
+          <tr>
+            <td style="font-weight:bold;vertical-align:top">${escapeHtml(label)}</td>
+            <td>${isHtml ? value : escapeHtml(value)}</td>
+          </tr>
+        `).join("")}
+      </table>
+      <p><a href="${escapeHtml(PUBLIC_APP_URL)}/index.html#player">Démarrer la partie</a></p>
+      <p>Bonne aventure !</p>
+    </div>
+  `;
+}
+
+async function sendConfirmationEmailForCode(codeValue) {
+  if (!RESEND_API_KEY || !MAIL_FROM) {
+    return { configured: false, sent: false };
+  }
+
+  const pending = await withDataMutation(async () => {
+    const stored = await readStoredData();
+    const code = stored?.codes?.find((item) => item.code === codeValue);
+    if (!stored || !code) return null;
+    if (code.confirmationEmailSentAt) {
+      return { alreadySent: true };
+    }
+    if (code.confirmationEmailStatus === "sending" && Date.now() - Number(code.confirmationEmailStartedAt || 0) < 5 * 60 * 1000) {
+      return { alreadySending: true };
+    }
+    const route = stored.routes.find((item) => item.id === code.routeId);
+    if (!route || !code.customerEmail) {
+      code.confirmationEmailStatus = code.customerEmail ? "error" : "missing_email";
+      code.confirmationEmailError = code.customerEmail ? "Parcours introuvable." : "Adresse e-mail manquante.";
+      await writeStoredData(stored);
+      return { configured: true, sent: false, skipped: true };
+    }
+    code.confirmationEmailStatus = "sending";
+    code.confirmationEmailStartedAt = Date.now();
+    code.confirmationEmailError = null;
+    await writeStoredData(stored);
+    return { code: { ...code }, route };
+  });
+
+  if (!pending || pending.alreadySent || pending.alreadySending || pending.skipped) {
+    return {
+      configured: true,
+      sent: Boolean(pending?.alreadySent),
+      skipped: Boolean(pending?.skipped || pending?.alreadySending),
+    };
+  }
+
+  try {
+    const subject = "Votre code Escape Erezée";
+    const mailResult = await sendResendEmail({
+      to: pending.code.customerEmail,
+      subject,
+      text: buildActivationMailBody(pending.code.code, pending.route, pending.code),
+      html: buildActivationMailHtml(pending.code.code, pending.route, pending.code),
+    });
+    await withDataMutation(async () => {
+      const stored = await readStoredData();
+      const code = stored?.codes?.find((item) => item.code === codeValue);
+      if (!stored || !code) return;
+      code.confirmationEmailStatus = "sent";
+      code.confirmationEmailSentAt = Date.now();
+      code.confirmationEmailProvider = mailResult.provider;
+      code.confirmationEmailId = mailResult.id || null;
+      code.confirmationEmailError = null;
+      await writeStoredData(stored);
+    });
+    return mailResult;
+  } catch (error) {
+    await withDataMutation(async () => {
+      const stored = await readStoredData();
+      const code = stored?.codes?.find((item) => item.code === codeValue);
+      if (!stored || !code) return;
+      code.confirmationEmailStatus = "error";
+      code.confirmationEmailError = error.message || "E-mail non envoye.";
+      await writeStoredData(stored);
+    });
+    return { configured: true, sent: false, error: error.message || "E-mail non envoye." };
+  }
 }
 
 async function handleOdooActivationCode(request, response) {
@@ -386,6 +752,141 @@ async function handleOdooActivationCode(request, response) {
   return true;
 }
 
+async function handleCreateCheckoutSession(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+  if (!STRIPE_SECRET_KEY) {
+    sendJson(response, 503, { message: "Paiement Stripe non configure." });
+    return true;
+  }
+
+  try {
+    const body = await readRequestBody(request);
+    const payload = body ? JSON.parse(body) : {};
+    const stored = await readStoredData();
+    if (!stored) {
+      sendJson(response, 409, { message: "Aucune donnee serveur disponible." });
+      return true;
+    }
+
+    const route = stored.routes.find((item) => item.id === compactText(payload.routeId));
+    if (!route || !isRouteVisibleInShop(route)) {
+      sendJson(response, 404, { message: "Ce parcours n'est pas disponible a la vente." });
+      return true;
+    }
+
+    const unitAmount = getRoutePriceCents(route);
+    if (unitAmount <= 0) {
+      sendJson(response, 400, { message: "Le prix du parcours doit etre superieur a 0." });
+      return true;
+    }
+
+    const playerCount = getPlayerCount(payload.playerCount);
+    const origin = getRequestOrigin(request);
+    const params = new URLSearchParams();
+    appendStripeParam(params, "mode", "payment");
+    appendStripeParam(params, "client_reference_id", route.id);
+    appendStripeParam(params, "customer_creation", "always");
+    appendStripeParam(params, "billing_address_collection", "required");
+    appendStripeParam(params, "success_url", `${origin}/index.html?checkout=success&session_id={CHECKOUT_SESSION_ID}#player`);
+    appendStripeParam(params, "cancel_url", `${origin}/index.html?checkout=cancel#player`);
+    appendStripeParam(params, "line_items[0][quantity]", playerCount);
+    appendStripeParam(params, "line_items[0][price_data][currency]", "eur");
+    appendStripeParam(params, "line_items[0][price_data][unit_amount]", unitAmount);
+    appendStripeParam(params, "line_items[0][price_data][product_data][name]", route.title);
+    appendStripeParam(params, "line_items[0][price_data][product_data][description]", route.description || route.area || route.title);
+    appendStripeParam(params, "metadata[routeId]", route.id);
+    appendStripeParam(params, "metadata[playerCount]", playerCount);
+    appendStripeParam(params, "custom_fields[0][key]", "prenom");
+    appendStripeParam(params, "custom_fields[0][label][type]", "custom");
+    appendStripeParam(params, "custom_fields[0][label][custom]", "Prénom");
+    appendStripeParam(params, "custom_fields[0][type]", "text");
+    appendStripeParam(params, "custom_fields[0][text][maximum_length]", 80);
+    appendStripeParam(params, "custom_fields[0][optional]", "false");
+    appendStripeParam(params, "custom_fields[1][key]", "nom");
+    appendStripeParam(params, "custom_fields[1][label][type]", "custom");
+    appendStripeParam(params, "custom_fields[1][label][custom]", "Nom");
+    appendStripeParam(params, "custom_fields[1][type]", "text");
+    appendStripeParam(params, "custom_fields[1][text][maximum_length]", 80);
+    appendStripeParam(params, "custom_fields[1][optional]", "false");
+    appendStripeParam(params, "custom_text[submit][message]", "Votre code d'activation sera envoyé par e-mail après paiement.");
+
+    const session = await stripeRequest("POST", "/v1/checkout/sessions", params);
+    sendJson(response, 200, { ok: true, url: session.url, sessionId: session.id });
+  } catch (error) {
+    sendJson(response, 400, { message: error.message || "Paiement indisponible." });
+  }
+
+  return true;
+}
+
+async function handleCheckoutSession(request, response) {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+  if (!STRIPE_SECRET_KEY) {
+    sendJson(response, 503, { message: "Paiement Stripe non configure." });
+    return true;
+  }
+
+  try {
+    const requestUrl = new URL(request.url, getRequestOrigin(request));
+    const sessionId = compactText(requestUrl.searchParams.get("session_id"));
+    if (!sessionId) {
+      sendJson(response, 400, { message: "Session Stripe manquante." });
+      return true;
+    }
+
+    const session = await stripeRequest("GET", `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`);
+    if (session.payment_status !== "paid") {
+      sendJson(response, 409, { message: "Paiement pas encore valide." });
+      return true;
+    }
+
+    const result = await createOrReuseStripeCode(session);
+    sendJson(response, result.status, result.payload);
+  } catch (error) {
+    sendJson(response, 400, { message: error.message || "Code indisponible." });
+  }
+
+  return true;
+}
+
+async function handleStripeWebhook(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+  if (!STRIPE_WEBHOOK_SECRET) {
+    sendJson(response, 503, { message: "Webhook Stripe non configure." });
+    return true;
+  }
+
+  const rawBody = await readRequestBody(request);
+  if (!verifyStripeSignature(rawBody, request.headers["stripe-signature"])) {
+    sendJson(response, 401, { message: "Signature Stripe invalide." });
+    return true;
+  }
+
+  try {
+    const event = JSON.parse(rawBody);
+    if (event.type === "checkout.session.completed") {
+      const session = event.data?.object;
+      if (session?.payment_status === "paid") {
+        await createOrReuseStripeCode(session);
+      }
+    }
+    sendJson(response, 200, { received: true });
+  } catch (error) {
+    sendJson(response, 400, { message: error.message || "Webhook Stripe illisible." });
+  }
+
+  return true;
+}
+
 async function handleApi(request, response, pathname) {
   if (pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
@@ -435,6 +936,18 @@ async function handleApi(request, response, pathname) {
 
   if (pathname === "/api/odoo/activation-code" || pathname === "/api/integrations/odoo/activation-code") {
     return handleOdooActivationCode(request, response);
+  }
+
+  if (pathname === "/api/shop/checkout") {
+    return handleCreateCheckoutSession(request, response);
+  }
+
+  if (pathname === "/api/shop/checkout-session") {
+    return handleCheckoutSession(request, response);
+  }
+
+  if (pathname === "/api/stripe/webhook") {
+    return handleStripeWebhook(request, response);
   }
 
   if (pathname !== "/api/data") return false;

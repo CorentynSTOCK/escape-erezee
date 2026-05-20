@@ -1,3 +1,4 @@
 data/escape-data.json
 data/*.tmp
 tools/
+.env*.local

@@ -11,12 +11,12 @@
     <title>Escape Erezée</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=22" />
+    <link rel="stylesheet" href="styles.css?v=26" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="side-nav" aria-label="Navigation principale">
-        <a class="brand" href="#player" aria-label="Escape Erezée">
+        <a class="brand" href="#shop" aria-label="Escape Erezée">
           <span class="brand-mark" aria-hidden="true">EE</span>
           <span>
             <strong>Escape Erezée</strong>
@@ -25,6 +25,10 @@
         </a>
 
         <nav class="main-nav" aria-label="Espaces">
+          <a class="nav-link" href="#shop" data-route="shop">
+            <span aria-hidden="true">€</span>
+            Boutique
+          </a>
           <a class="nav-link" href="#player" data-route="player">
             <span aria-hidden="true">⌖</span>
             Jouer
@@ -44,6 +48,29 @@
       </aside>
 
       <main>
+        <section class="view shop-view" id="shop-view" aria-labelledby="shop-page-title">
+          <header class="topbar shop-topbar">
+            <div>
+              <p class="section-label">Boutique Escape Erezée</p>
+              <h1 id="shop-page-title">Choisissez votre parcours</h1>
+            </div>
+            <div class="topbar-actions">
+              <a class="secondary-button" href="#player">J’ai déjà un code</a>
+            </div>
+          </header>
+
+          <section class="shop-panel" aria-labelledby="shop-title">
+            <div class="shop-heading">
+              <div>
+                <p class="section-label">Parcours en vente</p>
+                <h2 id="shop-title">Aventures disponibles</h2>
+              </div>
+            </div>
+            <div class="shop-list" id="shop-list"></div>
+            <p class="shop-empty" id="shop-empty" role="status"></p>
+          </section>
+        </section>
+
         <section class="view player-view" id="player-view" aria-labelledby="player-title">
           <header class="topbar">
             <div>
@@ -58,10 +85,10 @@
           <div class="player-layout">
             <section class="login-panel" id="login-panel" aria-label="Connexion joueur">
               <div class="login-copy">
-                <h2>Entrez votre code d’activation</h2>
+                <h2>Entrez votre code</h2>
                 <p>
-                  Chaque équipe reçoit un code unique pour ouvrir son parcours et
-                  lancer le temps de jeu.
+                  Votre code d’activation ouvre le parcours acheté et lance le
+                  temps de jeu de votre équipe.
                 </p>
               </div>
               <form class="activation-form" id="activation-form">
@@ -260,8 +287,21 @@
                   <input name="duration" required type="number" min="15" value="90" />
                 </label>
                 <label>
+                  Prix par personne
+                  <input name="price" required type="number" min="0" step="0.01" value="18" />
+                </label>
+                <label class="check-row">
+                  <input name="shop-visible" type="checkbox" checked />
+                  Visible dans la boutique
+                </label>
+                <label>
                   Description
                   <textarea name="description" required placeholder="Description courte du parcours"></textarea>
+                </label>
+                <label class="file-input route-image-uploader">
+                  Image de boutique
+                  <input name="cover-image" type="file" accept="image/*" />
+                  <span class="preview-name">Image affichée dans la boutique.</span>
                 </label>
                 <button class="primary-button full-button" type="submit">Ajouter</button>
               </form>
@@ -289,10 +329,31 @@
                   Durée en minutes
                   <input id="route-details-duration" name="route-details-duration" type="number" min="1" required />
                 </label>
+                <div class="coordinate-grid">
+                  <label>
+                    Prix par personne
+                    <input id="route-details-price" name="route-details-price" type="number" min="0" step="0.01" required />
+                  </label>
+                  <label class="check-row">
+                    <input id="route-details-shop-visible" name="route-details-shop-visible" type="checkbox" />
+                    Visible dans la boutique
+                  </label>
+                </div>
                 <label>
                   Description
                   <textarea id="route-details-description" name="route-details-description" required></textarea>
                 </label>
+                <label class="file-input route-image-uploader">
+                  Image de boutique
+                  <input id="route-details-image" name="route-details-image" type="file" accept="image/*" />
+                  <span class="preview-name">Elle remplace le bloc couleur sur la carte de la boutique.</span>
+                </label>
+                <div class="image-preview is-empty" id="route-details-image-preview">
+                  Aucune image de boutique ajoutée.
+                </div>
+                <button class="secondary-button full-button" id="remove-route-image" type="button">
+                  Supprimer l’image de boutique
+                </button>
                 <p class="form-message" id="route-details-message" role="status"></p>
                 <button class="primary-button full-button" type="submit">Enregistrer le parcours</button>
               </form>
@@ -528,6 +589,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="app.js?v=22" type="module"></script>
+    <script src="app.js?v=26" type="module"></script>
   </body>
 </html>
