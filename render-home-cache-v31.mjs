@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 const INDEX_FILE = new URL("./index.html", import.meta.url);
 const SERVICE_WORKER_FILE = new URL("./service-worker.js", import.meta.url);
 const SERVER_FILE = new URL("./server.mjs", import.meta.url);
+const STYLE_FILE = new URL("./styles.css", import.meta.url);
 const LOGO_B64_FILE = new URL("./assets/logo-escape.jpg.b64", import.meta.url);
 const LOGO_JPG_FILE = new URL("./assets/logo-escape.jpg", import.meta.url);
 const LOGO_SVG_FILE = new URL("./assets/logo-escape.svg", import.meta.url);
@@ -56,13 +57,21 @@ const textFixes = [
   ["Le code recu apres l'achat du parcours.", "Le code reçu après l’achat du parcours."],
 ];
 
+const LOGO_CROP_CSS = `
+/* logo-artifact-crop */
+.home-hero-logo,
+.brand-logo-mark img {
+  clip-path: inset(0 10px 8px 0);
+}
+`;
+
 await writeLogoAsset();
 
 await patchFile(INDEX_FILE, (code) => {
   let next = code
-    .replace(/styles\.css\?v=\d+/g, "styles.css?v=36")
-    .replace(/app\.js\?v=\d+/g, "app.js?v=36")
-    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=36");
+    .replace(/styles\.css\?v=\d+/g, "styles.css?v=37")
+    .replace(/app\.js\?v=\d+/g, "app.js?v=37")
+    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=37");
 
   for (const [from, to] of textFixes) {
     next = next.replaceAll(from, to);
@@ -79,12 +88,17 @@ await patchFile(SERVER_FILE, (code) => {
   );
 });
 
-await patchFile(SERVICE_WORKER_FILE, (code) => {
-  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v36");
-  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=36");
+await patchFile(STYLE_FILE, (code) => {
+  if (code.includes("logo-artifact-crop")) return code;
+  return `${code.trimEnd()}\n${LOGO_CROP_CSS}\n`;
+});
 
-  if (!next.includes("./assets/logo-escape.jpg?v=36")) {
-    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=36",`);
+await patchFile(SERVICE_WORKER_FILE, (code) => {
+  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v37");
+  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=37");
+
+  if (!next.includes("./assets/logo-escape.jpg?v=37")) {
+    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=37",`);
   }
 
   return next;
