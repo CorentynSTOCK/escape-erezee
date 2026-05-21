@@ -65,13 +65,33 @@ const LOGO_CROP_CSS = `
 }
 `;
 
+const SHOP_MOBILE_CSS = `
+/* shop-mobile-layout-fix */
+@media (max-width: 720px) {
+  .shop-route-card,
+  .shop-route-visual,
+  .shop-buy-form {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .shop-route-card {
+    overflow: hidden;
+  }
+
+  .shop-buy-form {
+    grid-template-columns: 1fr;
+  }
+}
+`;
+
 await writeLogoAsset();
 
 await patchFile(INDEX_FILE, (code) => {
   let next = code
-    .replace(/styles\.css\?v=\d+/g, "styles.css?v=37")
-    .replace(/app\.js\?v=\d+/g, "app.js?v=37")
-    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=37");
+    .replace(/styles\.css\?v=\d+/g, "styles.css?v=38")
+    .replace(/app\.js\?v=\d+/g, "app.js?v=38")
+    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=38");
 
   for (const [from, to] of textFixes) {
     next = next.replaceAll(from, to);
@@ -89,16 +109,22 @@ await patchFile(SERVER_FILE, (code) => {
 });
 
 await patchFile(STYLE_FILE, (code) => {
-  if (code.includes("logo-artifact-crop")) return code;
-  return `${code.trimEnd()}\n${LOGO_CROP_CSS}\n`;
+  let next = code.trimEnd();
+  if (!next.includes("logo-artifact-crop")) {
+    next += `\n${LOGO_CROP_CSS}`;
+  }
+  if (!next.includes("shop-mobile-layout-fix")) {
+    next += `\n${SHOP_MOBILE_CSS}`;
+  }
+  return `${next}\n`;
 });
 
 await patchFile(SERVICE_WORKER_FILE, (code) => {
-  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v37");
-  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=37");
+  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v38");
+  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=38");
 
-  if (!next.includes("./assets/logo-escape.jpg?v=37")) {
-    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=37",`);
+  if (!next.includes("./assets/logo-escape.jpg?v=38")) {
+    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=38",`);
   }
 
   return next;
