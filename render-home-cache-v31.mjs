@@ -18,12 +18,12 @@ async function patchFile(fileUrl, patcher) {
 async function writeLogoAsset() {
   let encoded = "";
   try {
-    encoded = (await readFile(LOGO_B64_FILE, "utf8")).trim();
+    encoded = (await readFile(LOGO_B64_FILE, "utf8")).replace(/\s+/g, "");
   } catch {}
   if (!encoded) {
     try {
       const svg = await readFile(LOGO_SVG_FILE, "utf8");
-      encoded = svg.match(/base64,([^"']+)/)?.[1]?.trim() || "";
+      encoded = svg.match(/base64,([^"']+)/)?.[1]?.replace(/\s+/g, "") || "";
     } catch {}
   }
   if (encoded) {
@@ -60,9 +60,9 @@ await writeLogoAsset();
 
 await patchFile(INDEX_FILE, (code) => {
   let next = code
-    .replace(/styles\.css\?v=\d+/g, "styles.css?v=35")
-    .replace(/app\.js\?v=\d+/g, "app.js?v=35")
-    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=35");
+    .replace(/styles\.css\?v=\d+/g, "styles.css?v=36")
+    .replace(/app\.js\?v=\d+/g, "app.js?v=36")
+    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=36");
 
   for (const [from, to] of textFixes) {
     next = next.replaceAll(from, to);
@@ -80,11 +80,11 @@ await patchFile(SERVER_FILE, (code) => {
 });
 
 await patchFile(SERVICE_WORKER_FILE, (code) => {
-  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v35");
-  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=35");
+  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v36");
+  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=36");
 
-  if (!next.includes("./assets/logo-escape.jpg?v=35")) {
-    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=35",`);
+  if (!next.includes("./assets/logo-escape.jpg?v=36")) {
+    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=36",`);
   }
 
   return next;
