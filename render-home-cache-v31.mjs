@@ -60,9 +60,9 @@ await writeLogoAsset();
 
 await patchFile(INDEX_FILE, (code) => {
   let next = code
-    .replace(/styles\.css\?v=\d+/g, "styles.css?v=34")
-    .replace(/app\.js\?v=\d+/g, "app.js?v=34")
-    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=34");
+    .replace(/styles\.css\?v=\d+/g, "styles.css?v=35")
+    .replace(/app\.js\?v=\d+/g, "app.js?v=35")
+    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=35");
 
   for (const [from, to] of textFixes) {
     next = next.replaceAll(from, to);
@@ -80,11 +80,11 @@ await patchFile(SERVER_FILE, (code) => {
 });
 
 await patchFile(SERVICE_WORKER_FILE, (code) => {
-  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v34");
-  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=34");
+  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v35");
+  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=35");
 
-  if (!next.includes("./assets/logo-escape.jpg?v=34")) {
-    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=34",`);
+  if (!next.includes("./assets/logo-escape.jpg?v=35")) {
+    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=35",`);
   }
 
   return next;
