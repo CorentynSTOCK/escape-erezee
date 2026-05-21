@@ -31,21 +31,21 @@ const ROUTE_SUMMARY_FUNCTION = `function renderRouteSummary(team, route, progres
   const step = Math.min(progress.total, Math.max(1, currentIndex + 1 || 1));
   els.routeArea.textContent = route.area || "Parcours";
   els.routeTitle.textContent = route.title || "Parcours";
-  if (els.routeDuration) els.routeDuration.textContent = \`${route.duration || 0} min\`;
+  if (els.routeDuration) els.routeDuration.textContent = String(route.duration || 0) + " min";
   if (els.routePuzzleCount) {
-    els.routePuzzleCount.textContent = \`${progress.total} ${progress.total > 1 ? "\\u00e9nigmes" : "\\u00e9nigme"}\`;
+    els.routePuzzleCount.textContent = progress.total + " " + (progress.total > 1 ? "\\u00e9nigmes" : "\\u00e9nigme");
   }
   if (els.routeCurrentStep) {
     els.routeCurrentStep.textContent = team.status === "won"
       ? "Parcours termin\\u00e9"
-      : \`\\u00c9tape ${step} / ${progress.total}\`;
+      : "\\u00c9tape " + step + " / " + progress.total;
   }
 
   const cover = getRouteCoverImage(route);
   if (!els.routeHero) return;
   els.routeHero.classList.toggle("has-cover", Boolean(cover));
   els.routeHero.style.backgroundImage = cover
-    ? \`linear-gradient(135deg, rgba(12, 34, 29, 0.9), rgba(18, 60, 50, 0.62)), url("${cover.dataUrl}")\`
+    ? 'linear-gradient(135deg, rgba(12, 34, 29, 0.9), rgba(18, 60, 50, 0.62)), url("' + cover.dataUrl + '")'
     : "";
 }
 
