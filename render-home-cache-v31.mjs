@@ -2,12 +2,32 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const INDEX_FILE = new URL("./index.html", import.meta.url);
 const SERVICE_WORKER_FILE = new URL("./service-worker.js", import.meta.url);
+const SERVER_FILE = new URL("./server.mjs", import.meta.url);
+const LOGO_B64_FILE = new URL("./assets/logo-escape.jpg.b64", import.meta.url);
+const LOGO_JPG_FILE = new URL("./assets/logo-escape.jpg", import.meta.url);
+const LOGO_SVG_FILE = new URL("./assets/logo-escape.svg", import.meta.url);
 
 async function patchFile(fileUrl, patcher) {
   const original = await readFile(fileUrl, "utf8");
   const patched = patcher(original);
   if (patched !== original) {
     await writeFile(fileUrl, patched, "utf8");
+  }
+}
+
+async function writeLogoAsset() {
+  let encoded = "";
+  try {
+    encoded = (await readFile(LOGO_B64_FILE, "utf8")).trim();
+  } catch {}
+  if (!encoded) {
+    try {
+      const svg = await readFile(LOGO_SVG_FILE, "utf8");
+      encoded = svg.match(/base64,([^"']+)/)?.[1]?.trim() || "";
+    } catch {}
+  }
+  if (encoded) {
+    await writeFile(LOGO_JPG_FILE, Buffer.from(encoded, "base64"));
   }
 }
 
@@ -36,11 +56,13 @@ const textFixes = [
   ["Le code recu apres l'achat du parcours.", "Le code reçu après l’achat du parcours."],
 ];
 
+await writeLogoAsset();
+
 await patchFile(INDEX_FILE, (code) => {
   let next = code
-    .replace(/styles\.css\?v=\d+/g, "styles.css?v=33")
-    .replace(/app\.js\?v=\d+/g, "app.js?v=33")
-    .replace(/assets\/logo-escape\.svg(?:\?v=\d+)?/g, "assets/logo-escape.svg?v=33");
+    .replace(/styles\.css\?v=\d+/g, "styles.css?v=34")
+    .replace(/app\.js\?v=\d+/g, "app.js?v=34")
+    .replace(/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "assets/logo-escape.jpg?v=34");
 
   for (const [from, to] of textFixes) {
     next = next.replaceAll(from, to);
@@ -49,12 +71,20 @@ await patchFile(INDEX_FILE, (code) => {
   return next;
 });
 
-await patchFile(SERVICE_WORKER_FILE, (code) => {
-  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v33");
-  next = next.replace(/\.\/assets\/logo-escape\.svg(?:\?v=\d+)?/g, "./assets/logo-escape.svg?v=33");
+await patchFile(SERVER_FILE, (code) => {
+  if (code.includes('".jpg": "image/jpeg"')) return code;
+  return code.replace(
+    /(\s+"\.html": "text\/html; charset=utf-8",)/,
+    `$1\n  ".jpg": "image/jpeg",\n  ".jpeg": "image/jpeg",`,
+  );
+});
 
-  if (!next.includes("./assets/logo-escape.svg?v=33")) {
-    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.svg?v=33",`);
+await patchFile(SERVICE_WORKER_FILE, (code) => {
+  let next = code.replace(/escape-erezee-v\d+/, "escape-erezee-v34");
+  next = next.replace(/\.\/assets\/logo-escape\.(?:svg|jpg)(?:\?v=\d+)?/g, "./assets/logo-escape.jpg?v=34");
+
+  if (!next.includes("./assets/logo-escape.jpg?v=34")) {
+    next = next.replace(/(\s+"\.\/assets\/icon\.svg",)/, `$1\n  "./assets/logo-escape.jpg?v=34",`);
   }
 
   return next;
