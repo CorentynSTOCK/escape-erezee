@@ -1,4 +1,4 @@
-const CACHE_NAME = "escape-erezee-v26";
+const CACHE_NAME = "escape-erezee-v31";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./app.js",
   "./manifest.webmanifest",
   "./assets/icon.svg",
+  "./assets/logo-escape.svg?v=31",
 ];
 
 self.addEventListener("install", (event) => {
