@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Suivi des parcours - Escape Erezée</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --ink: #14201d;
+        --muted: #63736e;
+        --line: #dce6e1;
+        --green: #123c32;
+        --green-2: #1f6a58;
+        --river: #2c7fa3;
+        --amber: #d8942c;
+        --danger: #b8423d;
+        --soft: #f4f7f5;
+        --panel: #ffffff;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: #10231f;
+        color: #f8fffb;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      .login-screen {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 22px;
+      }
+
+      .login-card {
+        width: min(480px, 100%);
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.26);
+      }
+
+      .section-label {
+        margin: 0;
+        color: var(--green-2);
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      .login-card h1 {
+        margin: 6px 0 10px;
+        font-size: 1.8rem;
+        line-height: 1.05;
+      }
+
+      .login-card p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .login-card form {
+        display: grid;
+        gap: 10px;
+      }
+
+      .login-card label {
+        display: grid;
+        gap: 6px;
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 850;
+      }
+
+      .login-card input {
+        width: 100%;
+        min-height: 46px;
+        padding: 10px 12px;
+        border: 1px solid #cbd9d3;
+        border-radius: 6px;
+      }
+
+      .primary-button,
+      .secondary-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-weight: 900;
+      }
+
+      .primary-button {
+        background: #f1b449;
+        color: #10231f;
+      }
+
+      .secondary-button {
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+      }
+
+      .secondary-button.dark {
+        border-color: var(--line);
+        background: #fff;
+        color: var(--green);
+      }
+
+      .message {
+        min-height: 20px;
+        color: var(--danger);
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+
+      .tracking-screen {
+        display: grid;
+        min-height: 100vh;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      .tracking-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        background: #10231f;
+      }
+
+      .tracking-header .section-label {
+        color: #f1b449;
+      }
+
+      .tracking-header h1 {
+        margin: 2px 0 0;
+        font-size: 1.75rem;
+        line-height: 1;
+      }
+
+      .tracking-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .tracking-layout {
+        display: grid;
+        min-height: calc(100vh - 75px);
+        grid-template-columns: minmax(0, 1fr) 380px;
+      }
+
+      .map-shell {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .map-canvas {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        min-height: calc(100vh - 75px);
+        background: #dce8df;
+        isolation: isolate;
+      }
+
+      .map-tiles,
+      .map-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .map-tile {
+        position: absolute;
+        width: 256px;
+        height: 256px;
+        object-fit: cover;
+        user-select: none;
+      }
+
+      .map-layer {
+        z-index: 2;
+      }
+
+      .map-zone {
+        position: absolute;
+        border: 2px solid rgba(216, 148, 44, 0.95);
+        border-radius: 50%;
+        background: rgba(216, 148, 44, 0.18);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72);
+        transform: translate(-50%, -50%);
+      }
+
+      .map-marker {
+        position: absolute;
+        z-index: 3;
+        display: grid;
+        min-width: 32px;
+        min-height: 32px;
+        place-items: center;
+        border: 3px solid #fff;
+        border-radius: 999px;
+        box-shadow: 0 8px 18px rgba(18, 60, 50, 0.24);
+        transform: translate(-50%, -50%);
+      }
+
+      .marker-player {
+        background: var(--river);
+        color: var(--river);
+      }
+
+      .marker-target {
+        background: var(--amber);
+        color: var(--amber);
+      }
+
+      .marker-index-1.marker-player { background: var(--green-2); color: var(--green-2); }
+      .marker-index-2.marker-player { background: #7a5cff; color: #7a5cff; }
+      .marker-index-3.marker-player { background: var(--amber); color: var(--amber); }
+      .marker-index-4.marker-player { background: #c24b61; color: #c24b61; }
+      .marker-index-5.marker-player { background: #2f6f55; color: #2f6f55; }
+
+      .marker-label {
+        position: absolute;
+        top: calc(100% + 11px);
+        left: 50%;
+        min-width: max-content;
+        padding: 5px 7px;
+        border-radius: 6px;
+        background: rgba(19, 34, 31, 0.94);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 850;
+        line-height: 1;
+        transform: translateX(-50%);
+      }
+
+      .map-route-line {
+        position: absolute;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(44, 127, 163, 0.8);
+        transform-origin: 0 50%;
+      }
+
+      .map-attribution {
+        position: absolute;
+        right: 8px;
+        bottom: 7px;
+        z-index: 4;
+        padding: 3px 5px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.82);
+        color: #43534e;
+        font-size: 0.62rem;
+        font-weight: 750;
+      }
+
+      .map-empty-note {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 5;
+        width: min(80%, 420px);
+        padding: 12px 14px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 850;
+        text-align: center;
+        transform: translate(-50%, -50%);
+      }
+
+      .map-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 7;
+        display: flex;
+        gap: 6px;
+        padding: 4px;
+        border: 1px solid rgba(19, 34, 31, 0.12);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 10px 24px rgba(18, 60, 50, 0.16);
+      }
+
+      .map-control-button {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        place-items: center;
+        padding: 0;
+        border: 1px solid #cbd9d3;
+        border-radius: 6px;
+        background: #ffffff;
+        color: var(--green);
+        font-size: 1.05rem;
+        font-weight: 900;
+      }
+
+      .tracking-sidebar {
+        overflow: auto;
+        padding: 18px;
+        border-left: 1px solid var(--line);
+        background: #f8fbf9;
+        color: var(--ink);
+      }
+
+      .tracking-sidebar h2 {
+        margin: 4px 0 8px;
+        font-size: 1.25rem;
+      }
+
+      .summary {
+        min-height: 22px;
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 750;
+      }
+
+      .team-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .team-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .team-card.is-selected {
+        border-color: rgba(31, 106, 88, 0.42);
+        background: #eef7f3;
+      }
+
+      .team-card input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .team-copy {
+        display: grid;
+        min-width: 0;
+        gap: 3px;
+      }
+
+      .team-copy strong,
+      .team-copy small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .team-copy small {
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 750;
+      }
+
+      .progress-pill {
+        min-width: 44px;
+        padding: 5px 7px;
+        border-radius: 6px;
+        background: var(--green);
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 900;
+        text-align: center;
+      }
+
+      .empty-list {
+        margin: 0;
+        padding: 14px;
+        border: 1px dashed var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--muted);
+        font-weight: 750;
+      }
+
+      .is-hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 900px) {
+        .tracking-header,
+        .tracking-actions {
+          display: grid;
+          justify-content: stretch;
+        }
+
+        .tracking-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .map-canvas {
+          min-height: 68vh;
+        }
+
+        .tracking-sidebar {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="login-screen" id="login-screen">
+      <div class="login-card">
+        <p class="section-label">Suivi des parcours</p>
+        <h1>Accès gestion</h1>
+        <p>Connectez-vous pour afficher la carte grand écran et choisir les équipes à suivre.</p>
+        <form id="login-form">
+          <label>
+            Mot de passe gestion
+            <input id="admin-password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-button" type="submit">Se connecter</button>
+          <span class="message" id="login-message"></span>
+        </form>
+      </div>
+    </section>
+
+    <section class="tracking-screen is-hidden" id="tracking-screen">
+      <header class="tracking-header">
+        <div>
+          <p class="section-label">Suivi des parcours</p>
+          <h1>Carte grand écran</h1>
+        </div>
+        <div class="tracking-actions">
+          <button class="secondary-button" type="button" id="select-all">Tout afficher</button>
+          <button class="secondary-button" type="button" id="clear-all">Tout masquer</button>
+          <button class="secondary-button" type="button" id="refresh-now">Actualiser</button>
+          <a class="primary-button" href="index.html#admin">Retour gestion</a>
+        </div>
+      </header>
+
+      <div class="tracking-layout">
+        <main class="map-shell">
+          <div class="map-canvas" id="map" aria-label="Carte de suivi des équipes">
+            <div class="map-tiles" aria-hidden="true"></div>
+            <div class="map-layer" aria-hidden="true"></div>
+            <div class="map-controls" aria-label="Contrôles de carte">
+              <button class="map-control-button" type="button" id="zoom-out" aria-label="Dézoomer">-</button>
+              <button class="map-control-button" type="button" id="zoom-in" aria-label="Zoomer">+</button>
+              <button class="map-control-button" type="button" id="fullscreen" aria-label="Plein écran">⛶</button>
+            </div>
+            <div class="map-attribution">© OpenStreetMap</div>
+          </div>
+        </main>
+
+        <aside class="tracking-sidebar">
+          <p class="section-label">Filtres</p>
+          <h2>Équipes suivies</h2>
+          <p class="summary" id="summary"></p>
+          <div class="team-list" id="team-list"></div>
+        </aside>
+      </div>
+    </section>
+
+    <script>
+      const API_DATA_URL = "/api/data";
+      const ADMIN_SESSION_URL = "/api/admin/session";
+      const ADMIN_LOGIN_URL = "/api/admin/login";
+      const FILTER_KEY = "escape-erezee-suivi-teams";
+      const TILE_SIZE = 256;
+      const DEFAULT_CENTER = { lat: 50.29225, lng: 5.55995 };
+      const MAP_MIN_ZOOM = 3;
+      const MAP_MAX_ZOOM = 19;
+      const MAP_PADDING = 68;
+
+      const els = {
+        loginScreen: document.querySelector("#login-screen"),
+        loginForm: document.querySelector("#login-form"),
+        loginMessage: document.querySelector("#login-message"),
+        password: document.querySelector("#admin-password"),
+        trackingScreen: document.querySelector("#tracking-screen"),
+        map: document.querySelector("#map"),
+        tiles: document.querySelector(".map-tiles"),
+        layer: document.querySelector(".map-layer"),
+        summary: document.querySelector("#summary"),
+        teamList: document.querySelector("#team-list"),
+        selectAll: document.querySelector("#select-all"),
+        clearAll: document.querySelector("#clear-all"),
+        refreshNow: document.querySelector("#refresh-now"),
+        zoomIn: document.querySelector("#zoom-in"),
+        zoomOut: document.querySelector("#zoom-out"),
+        fullscreen: document.querySelector("#fullscreen"),
+      };
+
+      let data = { routes: [], teams: [], codes: [] };
+      let selectedFilter = loadFilter();
+      let mapZoomOverride = null;
+      let lastRenderOptions = null;
+      let refreshTimer = null;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function loadFilter() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(FILTER_KEY) || "null");
+          return Array.isArray(parsed) ? parsed.filter(Boolean) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function saveFilter(ids) {
+        selectedFilter = Array.isArray(ids) ? ids.filter(Boolean) : null;
+        if (selectedFilter) {
+          localStorage.setItem(FILTER_KEY, JSON.stringify(selectedFilter));
+        } else {
+          localStorage.removeItem(FILTER_KEY);
+        }
+      }
+
+      async function checkSession() {
+        try {
+          const response = await fetch(ADMIN_SESSION_URL, {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+            credentials: "same-origin",
+          });
+          const payload = response.ok ? await response.json() : { authenticated: false };
+          return Boolean(payload.authenticated);
+        } catch {
+          return false;
+        }
+      }
+
+      async function login(event) {
+        event.preventDefault();
+        els.loginMessage.textContent = "";
+        try {
+          const response = await fetch(ADMIN_LOGIN_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ password: els.password.value }),
+          });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.message || "Connexion impossible.");
+          }
+          els.password.value = "";
+          showTracking();
+          await refreshData();
+          startAutoRefresh();
+        } catch (error) {
+          els.loginMessage.textContent = error.message || "Connexion impossible.";
+        }
+      }
+
+      function showTracking() {
+        els.loginScreen.classList.add("is-hidden");
+        els.trackingScreen.classList.remove("is-hidden");
+      }
+
+      async function refreshData() {
+        try {
+          const response = await fetch(API_DATA_URL, {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+            credentials: "same-origin",
+          });
+          if (!response.ok) throw new Error("Données indisponibles.");
+          data = await response.json();
+          render();
+        } catch (error) {
+          els.summary.textContent = error.message || "Impossible de charger les données.";
+        }
+      }
+
+      function startAutoRefresh() {
+        clearInterval(refreshTimer);
+        refreshTimer = setInterval(refreshData, 5000);
+      }
+
+      function getRoute(routeId) {
+        return data.routes.find((route) => route.id === routeId) || null;
+      }
+
+      function isPosition(position) {
+        return Boolean(position && Number.isFinite(Number(position.lat)) && Number.isFinite(Number(position.lng)));
+      }
+
+      function getPuzzleLat(puzzle) {
+        return Number.isFinite(Number(puzzle?.lat)) ? Number(puzzle.lat) : DEFAULT_CENTER.lat;
+      }
+
+      function getPuzzleLng(puzzle) {
+        return Number.isFinite(Number(puzzle?.lng)) ? Number(puzzle.lng) : DEFAULT_CENTER.lng;
+      }
+
+      function getPuzzleRadius(puzzle) {
+        const radius = Number(puzzle?.radius);
+        return Number.isFinite(radius) && radius > 0 ? Math.min(1000, Math.max(20, radius)) : 120;
+      }
+
+      function getProgress(team, route) {
+        const answers = team.answers || {};
+        const solved = route.puzzles.filter((puzzle) => answers[puzzle.id]).length;
+        const total = Math.max(route.puzzles.length, 1);
+        return { solved, total, percent: Math.round((solved / total) * 100) };
+      }
+
+      function getCurrentPuzzle(team, route) {
+        const answers = team.answers || {};
+        return route.puzzles.find((puzzle) => !answers[puzzle.id]) || route.puzzles[route.puzzles.length - 1] || null;
+      }
+
+      function getTarget(team, route) {
+        const puzzle = getCurrentPuzzle(team, route);
+        if (!puzzle) return null;
+        return {
+          puzzle,
+          lat: getPuzzleLat(puzzle),
+          lng: getPuzzleLng(puzzle),
+          radius: getPuzzleRadius(puzzle),
+        };
+      }
+
+      function relativeTime(timestamp) {
+        if (!timestamp) return "jamais";
+        const ageSeconds = Math.max(0, Math.floor((Date.now() - Number(timestamp)) / 1000));
+        if (ageSeconds < 10) return "à l'instant";
+        if (ageSeconds < 60) return "il y a " + ageSeconds + " s";
+        const ageMinutes = Math.floor(ageSeconds / 60);
+        if (ageMinutes < 60) return "il y a " + ageMinutes + " min";
+        const ageHours = Math.floor(ageMinutes / 60);
+        return "il y a " + ageHours + " h";
+      }
+
+      function getEntries() {
+        return data.teams
+          .map((team) => {
+            const route = getRoute(team.routeId);
+            if (!route) return null;
+            const position = isPosition(team.lastPosition) ? team.lastPosition : null;
+            const target = getTarget(team, route);
+            return { team, route, position, target, progress: getProgress(team, route) };
+          })
+          .filter(Boolean);
+      }
+
+      function selectedIdsFor(entries) {
+        const ids = entries.map((entry) => entry.team.id);
+        if (!Array.isArray(selectedFilter)) return new Set(ids);
+        return new Set(selectedFilter.filter((id) => ids.includes(id)));
+      }
+
+      function render() {
+        const entries = getEntries();
+        const selectedIds = selectedIdsFor(entries);
+        const selectedEntries = entries.filter((entry) => selectedIds.has(entry.team.id));
+        const positionedEntries = selectedEntries.filter((entry) => entry.team.status === "playing" && entry.position);
+        const teamPlural = selectedIds.size === 1 ? "" : "s";
+        const positionPlural = positionedEntries.length === 1 ? "" : "s";
+        els.summary.textContent = selectedIds.size + " équipe" + teamPlural + " affichée" + teamPlural + " sur " + entries.length + ". " + positionedEntries.length + " position" + positionPlural + " reçue" + positionPlural + ".";
+        renderTeamList(entries, selectedIds);
+        renderMap(positionedEntries, selectedEntries.length ? "Aucune position reçue pour les équipes sélectionnées." : "Aucune équipe sélectionnée.");
+      }
+
+      function renderTeamList(entries, selectedIds) {
+        if (!entries.length) {
+          els.teamList.innerHTML = '<p class="empty-list">Aucune équipe connectée.</p>';
+          return;
+        }
+
+        els.teamList.innerHTML = entries
+          .map((entry) => {
+            const checked = selectedIds.has(entry.team.id);
+            const statusText = entry.team.status === "won"
+              ? "Terminé"
+              : entry.team.status === "lost"
+                ? "Perdu"
+                : entry.team.status === "playing"
+                  ? "En cours"
+                  : "Briefing";
+            const positionText = entry.position
+              ? (Date.now() - Number(entry.position.at || 0) > 10 * 60 * 1000 ? "Ancienne position" : "Position reçue") + " · " + relativeTime(entry.position.at)
+              : "Pas de position";
+            return [
+              '<label class="team-card ' + (checked ? "is-selected" : "") + '">',
+                '<input type="checkbox" data-team-id="' + escapeHtml(entry.team.id) + '" ' + (checked ? "checked" : "") + ' />',
+                '<span class="team-copy">',
+                  '<strong>' + escapeHtml(entry.team.name || "Équipe") + '</strong>',
+                  '<small>' + escapeHtml(entry.route.title || "Parcours") + ' · ' + statusText + '</small>',
+                  '<small>' + escapeHtml(positionText) + '</small>',
+                '</span>',
+                '<span class="progress-pill">' + entry.progress.solved + '/' + entry.progress.total + '</span>',
+              '</label>',
+            ].join("");
+          })
+          .join("");
+
+        document.querySelectorAll("[data-team-id]").forEach((input) => {
+          input.addEventListener("change", updateSelection);
+        });
+      }
+
+      function updateSelection() {
+        const inputs = Array.from(document.querySelectorAll("[data-team-id]"));
+        const ids = inputs.filter((input) => input.checked).map((input) => input.dataset.teamId);
+        saveFilter(ids.length === inputs.length ? null : ids);
+        render();
+      }
+
+      function clampZoom(value) {
+        return Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, Math.round(Number(value) || 16)));
+      }
+
+      function latLngToWorld(lat, lng, zoom) {
+        const sin = Math.sin((lat * Math.PI) / 180);
+        const scale = TILE_SIZE * 2 ** zoom;
+        return {
+          x: ((lng + 180) / 360) * scale,
+          y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale,
+        };
+      }
+
+      function worldToLatLng(x, y, zoom) {
+        const scale = TILE_SIZE * 2 ** zoom;
+        const lng = (x / scale) * 360 - 180;
+        const n = Math.PI - (2 * Math.PI * y) / scale;
+        const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+        return { lat, lng };
+      }
+
+      function metersToPixels(meters, lat, zoom) {
+        const metersPerPixel = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+        return Math.max(12, meters / metersPerPixel);
+      }
+
+      function getFitView(entries, width, height) {
+        const points = [];
+        entries.forEach((entry) => {
+          if (entry.position) points.push({ lat: Number(entry.position.lat), lng: Number(entry.position.lng) });
+          if (entry.target) points.push({ lat: Number(entry.target.lat), lng: Number(entry.target.lng) });
+        });
+        if (!points.length) return { center: DEFAULT_CENTER, zoom: 15 };
+
+        for (let zoom = MAP_MAX_ZOOM; zoom >= MAP_MIN_ZOOM; zoom -= 1) {
+          const worlds = points.map((point) => latLngToWorld(point.lat, point.lng, zoom));
+          const minX = Math.min(...worlds.map((point) => point.x));
+          const maxX = Math.max(...worlds.map((point) => point.x));
+          const minY = Math.min(...worlds.map((point) => point.y));
+          const maxY = Math.max(...worlds.map((point) => point.y));
+          if (maxX - minX <= width - MAP_PADDING * 2 && maxY - minY <= height - MAP_PADDING * 2) {
+            return { center: worldToLatLng((minX + maxX) / 2, (minY + maxY) / 2, zoom), zoom };
+          }
+        }
+        const first = points[0];
+        return { center: first, zoom: MAP_MIN_ZOOM };
+      }
+
+      function renderMap(entries, emptyMessage) {
+        const rect = els.map.getBoundingClientRect();
+        const width = Math.max(Math.round(rect.width), 320);
+        const height = Math.max(Math.round(rect.height), 240);
+        const fit = getFitView(entries, width, height);
+        const zoom = clampZoom(mapZoomOverride ?? fit.zoom);
+        const center = fit.center;
+        lastRenderOptions = { entries, emptyMessage };
+
+        const centerWorld = latLngToWorld(center.lat, center.lng, zoom);
+        const topLeft = { x: centerWorld.x - width / 2, y: centerWorld.y - height / 2 };
+        const startX = Math.floor(topLeft.x / TILE_SIZE);
+        const startY = Math.floor(topLeft.y / TILE_SIZE);
+        const endX = Math.floor((topLeft.x + width) / TILE_SIZE);
+        const endY = Math.floor((topLeft.y + height) / TILE_SIZE);
+        const maxTile = 2 ** zoom;
+        const tiles = [];
+
+        for (let x = startX; x <= endX; x += 1) {
+          for (let y = startY; y <= endY; y += 1) {
+            if (y < 0 || y >= maxTile) continue;
+            const wrappedX = ((x % maxTile) + maxTile) % maxTile;
+            tiles.push('<img class="map-tile" alt="" src="https://tile.openstreetmap.org/' + zoom + '/' + wrappedX + '/' + y + '.png" style="left:' + Math.round(x * TILE_SIZE - topLeft.x) + 'px;top:' + Math.round(y * TILE_SIZE - topLeft.y) + 'px" />');
+          }
+        }
+
+        const pointFor = (point) => {
+          const world = latLngToWorld(point.lat, point.lng, zoom);
+          return { x: world.x - topLeft.x, y: world.y - topLeft.y };
+        };
+        const overlay = [];
+
+        entries.forEach((entry, index) => {
+          if (entry.target) {
+            const targetPoint = pointFor(entry.target);
+            const radiusPixels = metersToPixels(entry.target.radius || 120, Number(entry.target.lat), zoom);
+            overlay.push('<span class="map-zone" style="left:' + targetPoint.x + 'px;top:' + targetPoint.y + 'px;width:' + radiusPixels * 2 + 'px;height:' + radiusPixels * 2 + 'px"></span>');
+            overlay.push('<span class="map-marker marker-target" style="left:' + targetPoint.x + 'px;top:' + targetPoint.y + 'px"><span class="marker-label">Obj. ' + (index + 1) + '</span></span>');
+          }
+
+          if (entry.position) {
+            const playerPoint = pointFor(entry.position);
+            overlay.push('<span class="map-marker marker-player marker-index-' + (index % 6) + '" style="left:' + playerPoint.x + 'px;top:' + playerPoint.y + 'px"><span class="marker-label">' + escapeHtml((index + 1) + '. ' + (entry.team.name || 'Équipe')) + '</span></span>');
+            if (entry.target) {
+              const targetPoint = pointFor(entry.target);
+              const dx = targetPoint.x - playerPoint.x;
+              const dy = targetPoint.y - playerPoint.y;
+              const lineLength = Math.sqrt(dx ** 2 + dy ** 2);
+              const lineAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
+              overlay.push('<span class="map-route-line" style="left:' + playerPoint.x + 'px;top:' + playerPoint.y + 'px;width:' + lineLength + 'px;transform:rotate(' + lineAngle + 'deg)"></span>');
+            }
+          }
+        });
+
+        if (!entries.length) {
+          overlay.push('<span class="map-empty-note">' + escapeHtml(emptyMessage || 'Aucune position reçue pour le moment.') + '</span>');
+        }
+
+        els.tiles.innerHTML = tiles.join("");
+        els.layer.innerHTML = overlay.join("");
+      }
+
+      function rerenderMap() {
+        if (lastRenderOptions) renderMap(lastRenderOptions.entries, lastRenderOptions.emptyMessage);
+      }
+
+      els.loginForm.addEventListener("submit", login);
+      els.selectAll.addEventListener("click", () => { saveFilter(null); render(); });
+      els.clearAll.addEventListener("click", () => { saveFilter([]); render(); });
+      els.refreshNow.addEventListener("click", refreshData);
+      els.zoomIn.addEventListener("click", () => { mapZoomOverride = clampZoom((mapZoomOverride ?? 16) + 1); rerenderMap(); });
+      els.zoomOut.addEventListener("click", () => { mapZoomOverride = clampZoom((mapZoomOverride ?? 16) - 1); rerenderMap(); });
+      els.fullscreen.addEventListener("click", () => {
+        const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+        const requestFullscreen = els.map.requestFullscreen || els.map.webkitRequestFullscreen;
+        const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+        if (!requestFullscreen || !exitFullscreen) return;
+        const action = fullscreenElement === els.map ? exitFullscreen.call(document) : requestFullscreen.call(els.map);
+        Promise.resolve(action).then(() => setTimeout(rerenderMap, 120)).catch(() => {});
+      });
+      ["fullscreenchange", "webkitfullscreenchange", "resize"].forEach((eventName) => {
+        window.addEventListener(eventName, () => setTimeout(rerenderMap, 120));
+      });
+
+      checkSession().then(async (authenticated) => {
+        if (!authenticated) return;
+        showTracking();
+        await refreshData();
+        startAutoRefresh();
+      });
+    </script>
+  </body>
+</html>
