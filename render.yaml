@@ -2,11 +2,15 @@ services:
   - type: web
     name: escape-erezee
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm install
     startCommand: npm start
+    disk:
+      name: escape-erezee-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 22
       - key: DATA_DIR
-        value: /tmp/escape-erezee-data
+        value: /data
