@@ -53,7 +53,7 @@ function patchApp(js) {
   for (let attempt = 1; attempt <= 7; attempt += 1) {
     try {
       const separator = API_DATA_URL.includes("?") ? "&" : "?";
-      const response = await fetch(\`${API_DATA_URL}\${separator}sync=\${Date.now()}-\${attempt}\`, {
+      const response = await fetch(API_DATA_URL + separator + "sync=" + Date.now() + "-" + attempt, {
         headers: { Accept: "application/json" },
         cache: "no-store",
         credentials: "same-origin",
@@ -63,7 +63,7 @@ function patchApp(js) {
         return response;
       }
 
-      lastError = new Error(\`Backend temporairement indisponible (\${response.status}).\`);
+      lastError = new Error("Backend temporairement indisponible (" + response.status + ").");
     } catch (error) {
       lastError = error;
       if (attempt === 7) {
@@ -172,7 +172,7 @@ function patchServiceWorker(js) {
 
   const url = new URL(event.request.url);
   const isApiRequest = url.pathname.startsWith("/api/");
-  const isFreshAsset = /\\.(?:js|css)$/.test(url.pathname);
+  const isFreshAsset = /\.(?:js|css)$/.test(url.pathname);
 
   if (isApiRequest || isFreshAsset) {
     event.respondWith(fetch(event.request, { cache: "no-store" }));
