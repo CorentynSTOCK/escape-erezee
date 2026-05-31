@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const VERSION = 86;
+const VERSION = 87;
 
 async function patchTextFile(filePath, patcher) {
   const input = await readFile(filePath, "utf8");
@@ -87,21 +87,35 @@ const MAX_DATA_BACKUPS = 30;`,
   );
 }
 
-const SEED_DEMO_HELPER = `function isSeedDemoData(value) {
+const PRODUCTION_DATA_HELPERS = `function isSeedDemoData(value) {
   const routes = Array.isArray(value?.routes) ? value.routes : [];
-  const teams = Array.isArray(value?.teams) ? value.teams : [];
-  const codes = Array.isArray(value?.codes) ? value.codes : [];
   return (
     routes.length === 1
     && routes[0]?.id === "route-tramway"
     && routes[0]?.title === "Le Secret du Tramway"
-    && teams.some((team) => team?.id === "team-demo")
-    && codes.some((code) => code?.code === "742-ERE-931")
+  );
+}
+
+function isProtectedRouteCatalogReset(previousData, nextData) {
+  const previousRoutes = Array.isArray(previousData?.routes) ? previousData.routes : [];
+  const nextRoutes = Array.isArray(nextData?.routes) ? nextData.routes : [];
+  if (previousRoutes.length < 2 || nextRoutes.length !== 1) return false;
+
+  const nextRoute = nextRoutes[0] || {};
+  const previousRouteIds = new Set(previousRoutes.map((route) => route?.id).filter(Boolean));
+  return (
+    !previousRouteIds.has(nextRoute.id)
+    && nextRoute.id === "route-tramway"
+    && nextRoute.title === "Le Secret du Tramway"
   );
 }`;
 
-function ensureSeedDemoHelper(input) {
-  return insertAfterFunction(input, "function stableJson", SEED_DEMO_HELPER, "function isSeedDemoData");
+function ensureProductionDataHelpers(input) {
+  if (input.includes("function isProtectedRouteCatalogReset")) return input;
+  if (input.includes("function isSeedDemoData")) {
+    return insertAfterFunction(input, "function isSeedDemoData", PRODUCTION_DATA_HELPERS.split("\n\n").slice(1).join("\n\n"), "function isProtectedRouteCatalogReset");
+  }
+  return insertAfterFunction(input, "function stableJson", PRODUCTION_DATA_HELPERS, "function isProtectedRouteCatalogReset");
 }
 
 function hardenPlayerSafeUpdate(input) {
@@ -159,7 +173,6 @@ function hardenStoredDataWrites(input) {
 }
 
 function hardenApiDataSave(input) {
-  if (input.includes("Protection anti-donnees demo")) return input;
   const oldBlock = `        const stored = await readStoredData();
         const adminWrite = isAdminRequest(request);
         if (!adminWrite && !isPlayerSafeUpdate(stored, payload)) {
@@ -168,7 +181,7 @@ function hardenApiDataSave(input) {
         const nextPayload = adminWrite || !stored ? payload : syncMergePlayerSafeData(stored, payload);
         await writeStoredData(nextPayload);
         return { status: 200, payload: { ok: true, savedAt: Date.now() } };`;
-  const newBlock = `        const stored = await readStoredData();
+  const previousProtectedBlock = `        const stored = await readStoredData();
         const adminWrite = isAdminRequest(request);
         if (isSeedDemoData(payload) && (!stored || !isSeedDemoData(stored))) {
           return { status: 409, payload: { message: "Protection anti-donnees demo: sauvegarde refusee." } };
@@ -182,6 +195,25 @@ function hardenApiDataSave(input) {
         const nextPayload = adminWrite || !stored ? payload : syncMergePlayerSafeData(stored, payload);
         await writeStoredData(nextPayload);
         return { status: 200, payload: { ok: true, savedAt: Date.now() } };`;
+  const newBlock = `        const stored = await readStoredData();
+        const adminWrite = isAdminRequest(request);
+        if (isSeedDemoData(payload) && (!stored || !isSeedDemoData(stored))) {
+          return { status: 409, payload: { message: "Protection anti-reinitialisation des parcours: sauvegarde refusee." } };
+        }
+        if (isProtectedRouteCatalogReset(stored, payload)) {
+          return { status: 409, payload: { message: "Protection anti-reinitialisation des parcours: sauvegarde refusee." } };
+        }
+        if (!adminWrite && !stored) {
+          return { status: 409, payload: { message: "Initialisation serveur reservee a la gestion." } };
+        }
+        if (!adminWrite && !isPlayerSafeUpdate(stored, payload)) {
+          return { status: 403, payload: { message: "Acces gestion requis." } };
+        }
+        const nextPayload = adminWrite || !stored ? payload : syncMergePlayerSafeData(stored, payload);
+        await writeStoredData(nextPayload);
+        return { status: 200, payload: { ok: true, savedAt: Date.now() } };`;
+  if (input.includes(newBlock)) return input;
+  if (input.includes(previousProtectedBlock)) return input.replace(previousProtectedBlock, newBlock);
   if (!input.includes(oldBlock)) {
     throw new Error(`Patch v${VERSION} introuvable: sauvegarde API data`);
   }
@@ -191,7 +223,7 @@ function hardenApiDataSave(input) {
 function patchServer(server) {
   let next = ensureImport(server);
   next = ensureBackupConstants(next);
-  next = ensureSeedDemoHelper(next);
+  next = ensureProductionDataHelpers(next);
   next = hardenPlayerSafeUpdate(next);
   next = hardenStoredDataWrites(next);
   next = hardenApiDataSave(next);
@@ -215,4 +247,4 @@ await patchTextFile("index.html", patchHtml);
 await patchTextFile("suivi.html", patchHtml);
 await patchTextFile("service-worker.js", patchServiceWorker);
 
-console.log("Protection donnees production v86 appliquee.");
+console.log("Protection donnees production v87 appliquee.");
