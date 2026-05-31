@@ -138,7 +138,7 @@ async function backupStoredDataIfPresent(nextPayload) {
     await mkdir(DATA_BACKUP_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupFile = path.join(DATA_BACKUP_DIR, \`escape-data-before-write-\${stamp}.json\`);
-    await writeFile(backupFile, \`${JSON.stringify(parsed, null, 2)}\\n\`, "utf8");
+    await writeFile(backupFile, \`\${JSON.stringify(parsed, null, 2)}\\n\`, "utf8");
     await pruneDataBackups();
   } catch (error) {
     if (error.code !== "ENOENT") console.warn("Sauvegarde de protection impossible.", error);
@@ -149,7 +149,7 @@ async function writeStoredData(payload) {
   await mkdir(DATA_DIR, { recursive: true });
   await backupStoredDataIfPresent(payload);
   const tempFile = \`${DATA_FILE}.tmp\`;
-  await writeFile(tempFile, \`${JSON.stringify(payload, null, 2)}\\n\`, "utf8");
+  await writeFile(tempFile, \`\${JSON.stringify(payload, null, 2)}\\n\`, "utf8");
   await rename(tempFile, DATA_FILE);
 }`;
 
