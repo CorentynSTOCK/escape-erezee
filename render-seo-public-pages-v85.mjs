@@ -13,11 +13,7 @@ async function patchIfExists(filePath, patcher) {
   await patchTextFile(filePath, patcher);
 }
 
-function patchServer(server) {
-  let next = server;
-
-  if (!next.includes("function handleSeoRequest(")) {
-    const helpers = `function sendText(response, statusCode, content, contentType = "text/plain; charset=utf-8", headers = {}) {
+function sendText(response, statusCode, content, contentType = "text/plain; charset=utf-8", headers = {}) {
   response.writeHead(statusCode, {
     "Content-Type": contentType,
     "Cache-Control": "no-cache",
@@ -65,7 +61,7 @@ function getRouteSeoImage(route, origin) {
   const image = route?.image || route?.coverImage || null;
   const url = compactText(image?.url || image?.src || route?.imageUrl || route?.coverImageUrl);
   if (url && !url.startsWith("data:")) return url.startsWith("http") ? url : `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
-  return `${origin}/assets/logo-escape.jpg?v=${VERSION}`;
+  return `${origin}/assets/logo-escape.jpg?v=${SEO_VERSION}`;
 }
 
 function makeJsonLd(value) {
@@ -82,27 +78,6 @@ function getRouteOffer(route, origin) {
     availability: "https://schema.org/InStock",
     url: `${origin}/index.html#shop`,
   };
-}
-
-function renderHomeStructuredData(origin) {
-  return makeJsonLd([
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: "Escape Erezee",
-      url: `${origin}/`,
-      inLanguage: "fr-BE",
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      name: "Escape Erezee",
-      url: `${origin}/`,
-      description: "Escape game exterieur a Erezee, en Ardenne belge, avec parcours d'enigmes a faire en equipe.",
-      areaServed: { "@type": "Place", name: "Erezee, Belgique" },
-      priceRange: "€€",
-    },
-  ]);
 }
 
 function renderRouteStructuredData(route, origin) {
@@ -128,8 +103,10 @@ function renderRouteSeoPage(route, routes, origin) {
   const duration = Number(route.duration) ? `${Number(route.duration)} minutes` : "Duree variable";
   const distance = compactText(route.distance) || "Distance indiquee sur place";
   const price = getRoutePriceCents(route) > 0 ? `${(getRoutePriceCents(route) / 100).toFixed(2).replace(".", ",")} € / personne` : "Prix disponible dans la boutique";
-  const otherRoutes = routes.filter((item) => item.id !== route.id).map((item) => `
-          <li><a href="${escapeHtml(getRoutePublicPath(item))}">${escapeHtml(item.title)}</a></li>`).join("");
+  const otherRoutes = routes
+    .filter((item) => item.id !== route.id)
+    .map((item) => `<li><a href="${escapeHtml(getRoutePublicPath(item))}">${escapeHtml(item.title)}</a></li>`)
+    .join("\n");
 
   return `<!doctype html>
 <html lang="fr-BE">
@@ -187,8 +164,7 @@ function renderRouteSeoPage(route, routes, origin) {
           <li><strong>Tarif</strong>${escapeHtml(price)}</li>
         </ul>
       </section>
-      ${otherRoutes ? `<nav aria-labelledby="autres-parcours"><h2 id="autres-parcours">Autres parcours Escape Erezee</h2><ul>${otherRoutes}
-        </ul></nav>` : ""}
+      ${otherRoutes ? `<nav aria-labelledby="autres-parcours"><h2 id="autres-parcours">Autres parcours Escape Erezee</h2><ul>${otherRoutes}</ul></nav>` : ""}
     </main>
   </body>
 </html>`;
@@ -243,7 +219,27 @@ Sitemap: ${origin}/sitemap.xml
   return false;
 }
 
-`;
+function patchServer(server) {
+  let next = server;
+
+  if (!next.includes("function handleSeoRequest(")) {
+    const helpers = [
+      `const SEO_VERSION = ${VERSION};`,
+      sendText.toString(),
+      escapeXml.toString(),
+      getSeoOrigin.toString(),
+      slugifyRoute.toString(),
+      getRoutePublicPath.toString(),
+      getPublicRoutes.toString(),
+      getRouteSeoDescription.toString(),
+      getRouteSeoImage.toString(),
+      makeJsonLd.toString(),
+      getRouteOffer.toString(),
+      renderRouteStructuredData.toString(),
+      renderRouteSeoPage.toString(),
+      buildSitemapXml.toString(),
+      handleSeoRequest.toString(),
+    ].join("\n\n") + "\n\n";
     const marker = "async function stripeRequest";
     if (!next.includes(marker)) {
       throw new Error(`Patch v${VERSION} introuvable: insertion SEO`);
@@ -251,17 +247,13 @@ Sitemap: ${origin}/sitemap.xml
     next = next.replace(marker, helpers + marker);
   }
 
-  const oldServerFlow = `      const requestUrl = new URL(request.url || "/", ` + "`http://${request.headers.host || `${host}:${port}`}`" + `);
-      const handled = await handleApi(request, response, requestUrl.pathname);`;
-  const newServerFlow = `      const requestUrl = new URL(request.url || "/", ` + "`http://${request.headers.host || `${host}:${port}`}`" + `);
-      const seoHandled = await handleSeoRequest(request, response, requestUrl.pathname);
-      if (seoHandled) return;
-      const handled = await handleApi(request, response, requestUrl.pathname);`;
+  const handledLine = "      const handled = await handleApi(request, response, requestUrl.pathname);";
+  const seoFlow = "      const seoHandled = await handleSeoRequest(request, response, requestUrl.pathname);\n      if (seoHandled) return;\n" + handledLine;
   if (!next.includes("const seoHandled = await handleSeoRequest")) {
-    if (!next.includes(oldServerFlow)) {
+    if (!next.includes(handledLine)) {
       throw new Error(`Patch v${VERSION} introuvable: flux serveur`);
     }
-    next = next.replace(oldServerFlow, newServerFlow);
+    next = next.replace(handledLine, seoFlow);
   }
 
   return next;
