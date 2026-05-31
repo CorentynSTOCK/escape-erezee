@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const VERSION = 88;
-const LOGO_SRC = `assets/logo-stock-sevrin-v${VERSION}.jpg?v=${VERSION}`;
-const HERO_SRC = `assets/home-hero-ardenne-v${VERSION}.jpg?v=${VERSION}`;
-const SOCIAL_HERO_SRC = `https://escape-erezee.be/assets/home-hero-ardenne-v${VERSION}.jpg?v=${VERSION}`;
+const VERSION = 89;
+const LOGO_SRC = `assets/logo-stock-sevrin-v${VERSION}.svg?v=${VERSION}`;
+const HERO_SRC = "assets/home-hero-ardenne-v88.jpg?v=88";
+const SOCIAL_HERO_SRC = "https://escape-erezee.be/assets/home-hero-ardenne-v88.jpg?v=88";
 
 async function patchTextFile(filePath, patcher) {
   const input = await readFile(filePath, "utf8");
@@ -72,7 +72,8 @@ ${marker}
 .brand-logo-mark img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: linear-gradient(135deg, #78936b, #d2ab50);
 }
 
 .home-hero-bg {
@@ -86,8 +87,11 @@ ${marker}
 }
 
 .home-hero-logo {
-  width: min(280px, 60vw);
-  max-width: 60vw;
+  width: min(250px, 56vw);
+  max-width: 56vw;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  background: linear-gradient(135deg, #78936b, #d2ab50);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);

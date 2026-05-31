@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title desc">
+  <title id="title">Stock &amp; Sevrin Escape Games</title>
+  <desc id="desc">Logo Stock et Sevrin Escape Games avec ferme, moulin, serrure et cle.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#78936b"/>
+      <stop offset="0.52" stop-color="#c5a04e"/>
+      <stop offset="1" stop-color="#e0b64d"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4d46f"/>
+      <stop offset="0.52" stop-color="#c89b32"/>
+      <stop offset="1" stop-color="#ffe58a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="12" flood-color="#05100d" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .ink{fill:#071015}.gold{fill:url(#gold)}.line{fill:none;stroke:url(#gold);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}.thin{fill:none;stroke:#0b1415;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.cream{fill:#fff7e6}.word{font-family:Impact,'Arial Black','Arial Narrow',system-ui,sans-serif;font-weight:900;letter-spacing:0}.small{font-family:'Trebuchet MS',Arial,system-ui,sans-serif;font-weight:800;letter-spacing:10px}
+    </style>
+  </defs>
+  <rect width="960" height="640" rx="34" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <path class="line" d="M168 378a318 318 0 0 1 624 0"/>
+    <path class="line" stroke-width="4" d="M202 363a284 284 0 0 1 556 0"/>
+    <path class="ink" d="M183 362c72-34 160-54 264-54 123 0 238 26 330 72v108H183z"/>
+    <path class="gold" d="M455 190h50l-12-75a37 37 0 1 0-26 0z"/>
+    <path class="ink" d="M480 63a28 28 0 0 0-13 53l-10 59h46l-10-59a28 28 0 0 0-13-53z"/>
+    <g transform="translate(240 166)">
+      <path class="ink" d="M0 104 35 34 130 0l103 73v120H0z"/>
+      <path class="gold" d="M78 50h98v143H78z" opacity="0.9"/>
+      <path class="ink" d="M88 84h54v109H88z"/>
+      <path class="thin" d="M93 101h42M93 120l42 42M135 120l-42 42"/>
+      <path class="gold" d="M31 39 130 0l103 73-15 18-91-64-82 32z"/>
+      <circle class="ink" cx="154" cy="65" r="22"/>
+      <path class="gold" d="M151 43h7v44h-7zM132 62h44v7h-44z"/>
+    </g>
+    <g transform="translate(628 130)">
+      <path class="ink" d="M80 94h55l30 218H50z"/>
+      <path class="gold" d="M92 111h31l19 184H72z"/>
+      <path class="ink" d="M86 197h45v79H86z"/>
+      <circle class="gold" cx="108" cy="84" r="15"/>
+      <path class="line" stroke-width="9" d="M108 84 52 14M108 84 177 33M108 84 44 140M108 84 167 152"/>
+      <path class="thin" d="M52 14 73 50M177 33 142 58M44 140l38-25M167 152l-35-33"/>
+    </g>
+    <path class="line" d="M424 343c83-38 170-38 259-7"/>
+    <path class="line" d="M462 373c70-27 143-26 219-4" opacity="0.7"/>
+    <path class="gold" d="M448 335h64l-18-95a48 48 0 1 0-28 0z"/>
+    <path class="ink" d="M480 160a39 39 0 0 0-18 73l-15 83h66l-15-83a39 39 0 0 0-18-73z"/>
+    <rect x="110" y="354" width="740" height="126" rx="28" class="ink"/>
+    <text x="480" y="453" text-anchor="middle" class="word cream" font-size="88" stroke="#071015" stroke-width="8" paint-order="stroke">STOCK <tspan fill="url(#gold)" stroke="#071015">&amp;</tspan> SEVRIN</text>
+    <text x="480" y="545" text-anchor="middle" class="small gold" font-size="36">ESCAPE GAMES</text>
+    <path class="line" stroke-width="6" d="M198 528h116M646 528h116"/>
+    <g transform="translate(350 562)">
+      <circle cx="24" cy="24" r="21" class="line" stroke-width="7"/>
+      <circle cx="61" cy="24" r="21" class="line" stroke-width="7"/>
+      <path class="line" stroke-width="9" d="M79 24h220M265 24v28M288 24v18"/>
+      <path class="gold" d="M296 15h28v18h-28z"/>
+    </g>
+    <path class="line" stroke-width="7" d="M190 320c34 7 64 15 94 27M720 329c38 11 71 25 98 40" opacity="0.85"/>
+  </g>
+</svg>
