@@ -148,7 +148,7 @@ async function backupStoredDataIfPresent(nextPayload) {
 async function writeStoredData(payload) {
   await mkdir(DATA_DIR, { recursive: true });
   await backupStoredDataIfPresent(payload);
-  const tempFile = \`${DATA_FILE}.tmp\`;
+  const tempFile = \`\${DATA_FILE}.tmp\`;
   await writeFile(tempFile, \`\${JSON.stringify(payload, null, 2)}\\n\`, "utf8");
   await rename(tempFile, DATA_FILE);
 }`;
