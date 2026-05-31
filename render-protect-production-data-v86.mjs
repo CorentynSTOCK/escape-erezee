@@ -5,69 +5,89 @@ const VERSION = 86;
 async function patchTextFile(filePath, patcher) {
   const input = await readFile(filePath, "utf8");
   const output = patcher(input);
-  if (output !== input) {
-    await writeFile(filePath, output, "utf8");
-  }
+  if (output !== input) await writeFile(filePath, output, "utf8");
 }
 
-function replaceOnce(input, search, replacement, label) {
-  if (input.includes(replacement)) return input;
-  if (!input.includes(search)) {
-    throw new Error(`Patch v${VERSION} introuvable: ${label}`);
+function findFunctionEnd(input, start) {
+  const bodyStart = input.indexOf("{", start);
+  if (bodyStart < 0) return -1;
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let i = bodyStart; i < input.length; i += 1) {
+    const char = input[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
   }
-  return input.replace(search, replacement);
+  return -1;
+}
+
+function replaceFunction(input, signature, replacement) {
+  const start = input.indexOf(signature);
+  if (start < 0) throw new Error(`Patch v${VERSION} introuvable: ${signature}`);
+  const end = findFunctionEnd(input, start);
+  if (end < 0) throw new Error(`Patch v${VERSION} impossible: fin de ${signature}`);
+  return input.slice(0, start) + replacement + input.slice(end);
+}
+
+function insertAfterFunction(input, signature, insertion, marker) {
+  if (input.includes(marker)) return input;
+  const start = input.indexOf(signature);
+  if (start < 0) throw new Error(`Patch v${VERSION} introuvable: ${signature}`);
+  const end = findFunctionEnd(input, start);
+  if (end < 0) throw new Error(`Patch v${VERSION} impossible: insertion apres ${signature}`);
+  return input.slice(0, end) + "\n\n" + insertion + input.slice(end);
 }
 
 function patchApp(app) {
   let next = app;
-
-  next = replaceOnce(
-    next,
-    `    if (response.status === 404) {
-      saveData({ immediate: true });
-      showServerSyncNotice("Backend initialis\u00e9 avec les donn\u00e9es de cette machine.");
-      return;
-    }`,
-    `    if (response.status === 404) {
+  if (!next.includes("Sauvegarde suspendue pour proteger les parcours")) {
+    next = next.replace(
+      /    if \(response\.status === 404\) \{\n      saveData\(\{ immediate: true \}\);\n      showServerSyncNotice\([^\n]+\);\n      return;\n    \}/,
+      `    if (response.status === 404) {
       serverSyncEnabled = false;
       showServerSyncNotice("Donnees serveur absentes. Sauvegarde suspendue pour proteger les parcours.");
       return;
     }`,
-    "app 404 backend seed protection",
-  );
-
+    );
+  }
+  if (!next.includes("Sauvegarde suspendue pour proteger les parcours")) {
+    throw new Error(`Patch v${VERSION} introuvable: app 404 backend seed protection`);
+  }
   return next;
 }
 
-function patchServer(server) {
-  let next = server;
-
-  next = replaceOnce(
-    next,
+function ensureImport(input) {
+  return input.replace(
     `import { readFile, rename, stat, writeFile, mkdir } from "node:fs/promises";`,
     `import { readFile, readdir, rename, stat, unlink, writeFile, mkdir } from "node:fs/promises";`,
-    "server fs imports",
   );
+}
 
-  next = replaceOnce(
-    next,
+function ensureBackupConstants(input) {
+  if (input.includes("const DATA_BACKUP_DIR =")) return input;
+  return input.replace(
     `const DATA_FILE = path.join(DATA_DIR, "escape-data.json");`,
     `const DATA_FILE = path.join(DATA_DIR, "escape-data.json");
 const DATA_BACKUP_DIR = path.join(DATA_DIR, "backups");
 const MAX_DATA_BACKUPS = 30;`,
-    "server backup constants",
   );
-
-  next = replaceOnce(
-    next,
-    `function stableJson(value) {
-  return JSON.stringify(value ?? null);
-}`,
-    `function stableJson(value) {
-  return JSON.stringify(value ?? null);
 }
 
-function isSeedDemoData(value) {
+const SEED_DEMO_HELPER = `function isSeedDemoData(value) {
   const routes = Array.isArray(value?.routes) ? value.routes : [];
   const teams = Array.isArray(value?.teams) ? value.teams : [];
   const codes = Array.isArray(value?.codes) ? value.codes : [];
@@ -78,30 +98,25 @@ function isSeedDemoData(value) {
     && teams.some((team) => team?.id === "team-demo")
     && codes.some((code) => code?.code === "742-ERE-931")
   );
-}`,
-    "server demo seed detector",
-  );
+}`;
 
-  next = replaceOnce(
-    next,
-    `function isPlayerSafeUpdate(previousData, nextData) {
-  if (!previousData) return true;
-  return (`,
-    `function isPlayerSafeUpdate(previousData, nextData) {
+function ensureSeedDemoHelper(input) {
+  return insertAfterFunction(input, "function stableJson", SEED_DEMO_HELPER, "function isSeedDemoData");
+}
+
+function hardenPlayerSafeUpdate(input) {
+  return replaceFunction(input, "function isPlayerSafeUpdate", `function isPlayerSafeUpdate(previousData, nextData) {
   if (!previousData) return false;
-  return (`,
-    "server player cannot initialize backend",
+  return (
+    previousData.activeRouteId === nextData.activeRouteId
+    && stableJson(previousData.routes) === stableJson(nextData.routes)
+    && codesKeepSameCatalog(previousData.codes, nextData.codes)
+    && Array.isArray(nextData.teams)
   );
+}`);
+}
 
-  next = replaceOnce(
-    next,
-    `async function writeStoredData(payload) {
-  await mkdir(DATA_DIR, { recursive: true });
-  const tempFile = \`${DATA_FILE}.tmp\`;
-  await writeFile(tempFile, \`${JSON.stringify(payload, null, 2)}\\n\`, "utf8");
-  await rename(tempFile, DATA_FILE);
-}`,
-    `async function pruneDataBackups() {
+const PROTECTED_WRITE_FUNCTION = `async function pruneDataBackups() {
   try {
     const entries = await readdir(DATA_BACKUP_DIR, { withFileTypes: true });
     const files = entries
@@ -136,31 +151,50 @@ async function writeStoredData(payload) {
   const tempFile = \`${DATA_FILE}.tmp\`;
   await writeFile(tempFile, \`${JSON.stringify(payload, null, 2)}\\n\`, "utf8");
   await rename(tempFile, DATA_FILE);
-}`,
-    "server protective backups",
-  );
+}`;
 
-  next = replaceOnce(
-    next,
-    `        const stored = await readStoredData();
-        if (!isAdminRequest(request) && !isPlayerSafeUpdate(stored, payload)) {
+function hardenStoredDataWrites(input) {
+  if (input.includes("async function backupStoredDataIfPresent")) return input;
+  return replaceFunction(input, "async function writeStoredData", PROTECTED_WRITE_FUNCTION);
+}
+
+function hardenApiDataSave(input) {
+  if (input.includes("Protection anti-donnees demo")) return input;
+  const oldBlock = `        const stored = await readStoredData();
+        const adminWrite = isAdminRequest(request);
+        if (!adminWrite && !isPlayerSafeUpdate(stored, payload)) {
           return { status: 403, payload: { message: "Acces gestion requis." } };
         }
-        await writeStoredData(payload);`,
-    `        const stored = await readStoredData();
+        const nextPayload = adminWrite || !stored ? payload : syncMergePlayerSafeData(stored, payload);
+        await writeStoredData(nextPayload);
+        return { status: 200, payload: { ok: true, savedAt: Date.now() } };`;
+  const newBlock = `        const stored = await readStoredData();
+        const adminWrite = isAdminRequest(request);
         if (isSeedDemoData(payload) && (!stored || !isSeedDemoData(stored))) {
           return { status: 409, payload: { message: "Protection anti-donnees demo: sauvegarde refusee." } };
         }
-        if (!isAdminRequest(request) && !stored) {
+        if (!adminWrite && !stored) {
           return { status: 409, payload: { message: "Initialisation serveur reservee a la gestion." } };
         }
-        if (!isAdminRequest(request) && !isPlayerSafeUpdate(stored, payload)) {
+        if (!adminWrite && !isPlayerSafeUpdate(stored, payload)) {
           return { status: 403, payload: { message: "Acces gestion requis." } };
         }
-        await writeStoredData(payload);`,
-    "server data write guard",
-  );
+        const nextPayload = adminWrite || !stored ? payload : syncMergePlayerSafeData(stored, payload);
+        await writeStoredData(nextPayload);
+        return { status: 200, payload: { ok: true, savedAt: Date.now() } };`;
+  if (!input.includes(oldBlock)) {
+    throw new Error(`Patch v${VERSION} introuvable: sauvegarde API data`);
+  }
+  return input.replace(oldBlock, newBlock);
+}
 
+function patchServer(server) {
+  let next = ensureImport(server);
+  next = ensureBackupConstants(next);
+  next = ensureSeedDemoHelper(next);
+  next = hardenPlayerSafeUpdate(next);
+  next = hardenStoredDataWrites(next);
+  next = hardenApiDataSave(next);
   return next;
 }
 
