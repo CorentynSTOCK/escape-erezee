@@ -284,6 +284,20 @@ function mergePlayerSafeUpdate(previousData, nextData) {
 function patchServer(server) {
   let next = server;
 
+  if (next.includes("syncMergePlayerSafeData(stored, payload)")) {
+    const freshnessMarker = `    Number(team?.lastPosition?.at) || 0,
+    Number(team?.finishedAt) || 0,`;
+    if (!next.includes("Number(team?.briefingStartLocation?.at) || 0") && next.includes(freshnessMarker)) {
+      next = next.replace(
+        freshnessMarker,
+        `    Number(team?.lastPosition?.at) || 0,
+    Number(team?.briefingStartLocation?.at) || 0,
+    Number(team?.finishedAt) || 0,`,
+      );
+    }
+    return next;
+  }
+
   if (!next.includes("function mergePlayerSafeUpdate(previousData, nextData)")) {
     const helperMarker = `function isPlayerSafeUpdate(previousData, nextData) {
   if (!previousData) return true;
