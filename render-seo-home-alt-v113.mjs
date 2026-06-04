@@ -13,10 +13,6 @@ const altTexts = [
   },
 ];
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function escapeAttribute(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -26,10 +22,8 @@ function escapeAttribute(value) {
 }
 
 function patchImageAlt(html, src, alt) {
-  const escapedSrc = escapeRegExp(src);
-  const imagePattern = new RegExp(`<img\\b(?=[^>]*\\bsrc=["']${escapedSrc}["'])([^>]*)>`, "g");
-
-  return html.replace(imagePattern, (tag) => {
+  return html.replace(/<img\b[^>]*>/g, (tag) => {
+    if (!tag.includes(`src="${src}"`) && !tag.includes(`src='${src}'`)) return tag;
     if (/\balt\s*=\s*["'][^"']+["']/i.test(tag)) return tag;
 
     const escapedAlt = escapeAttribute(alt);
