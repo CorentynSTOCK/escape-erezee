@@ -16,6 +16,11 @@ const pageAltTexts = new Map([
   ["blog/que-faire-vacances-ardenne.html", "Vacances en Ardenne avec sorties nature et énigmes"],
 ]);
 
+const homeImageAltTexts = new Map([
+  ["assets/logo-stock-sevrin-v90.jpg?v=90", "Logo Stock & Sevrin Escape Games"],
+  ["assets/home-hero-vicinal-v90.jpg?v=90", "Escape game extérieur en Ardenne dans la région d'Érezée"],
+]);
+
 function escapeAttribute(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -30,8 +35,34 @@ async function patchPage(filePath, altText) {
   if (output !== input) await writeFile(filePath, output, "utf8");
 }
 
+function patchImageAltBySrc(html, src, altText) {
+  return html.replace(/<img\b[^>]*>/g, (tag) => {
+    if (!tag.includes(`src="${src}"`) && !tag.includes(`src='${src}'`)) return tag;
+    if (/\balt\s*=\s*["'][^"']+["']/i.test(tag)) return tag;
+
+    const escapedAlt = escapeAttribute(altText);
+    if (/\balt\s*=\s*["'][^"']*["']/i.test(tag)) {
+      return tag.replace(/\balt\s*=\s*["'][^"']*["']/i, `alt="${escapedAlt}"`);
+    }
+
+    return tag.replace(/\s*\/?>$/, ` alt="${escapedAlt}" />`);
+  });
+}
+
+async function patchHomePage() {
+  const input = await readFile("index.html", "utf8");
+  let output = input;
+
+  for (const [src, altText] of homeImageAltTexts) {
+    output = patchImageAltBySrc(output, src, altText);
+  }
+
+  if (output !== input) await writeFile("index.html", output, "utf8");
+}
+
 for (const [filePath, altText] of pageAltTexts) {
   await patchPage(filePath, altText);
 }
+await patchHomePage();
 
 console.log(`SEO image alt v${VERSION} applied.`);
