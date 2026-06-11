@@ -4,11 +4,11 @@ const VERSION = 157;
 const FALLBACK_IMAGE = `/assets/home-hero-vicinal-v90-small.jpg?v=${VERSION}`;
 
 const SAFE_IMAGES = {
-  ardenne: `/assets/home-hero-ardenne-v88.jpg?v=${VERSION}`,
+  ardenne: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   carnet: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   lettre: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   logo: `/assets/logo-stock-sevrin-v90.jpg?v=${VERSION}`,
-  serment: `/assets/home-hero-ardenne-v88.jpg?v=${VERSION}`,
+  serment: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   vicinal: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   vicinalSmall: FALLBACK_IMAGE,
 };
@@ -140,6 +140,19 @@ function addImageTagSafety(html) {
   });
 }
 
+function prioritizeFirstRealImage(html) {
+  let prioritized = false;
+  return html.replace(/<img\b[^>]*>/g, (tag) => {
+    if (prioritized) return tag;
+    if (/logo-stock-sevrin|brand-logo|icon\.svg/i.test(tag)) return tag;
+    prioritized = true;
+    return tag
+      .replace(/\sloading=["'][^"']*["']/i, '')
+      .replace(/\sfetchpriority=["'][^"']*["']/i, '')
+      .replace(/\s*\/?>$/, ' loading="eager" fetchpriority="high"$&');
+  });
+}
+
 function patchPublicHtml(html, filePath) {
   const preferred = PREFERRED_PAGE_IMAGES.get(filePath);
   let next = withVersionBump(normalizeAssetUrls(html));
@@ -151,6 +164,7 @@ function patchPublicHtml(html, filePath) {
   }
 
   next = addImageTagSafety(next);
+  next = prioritizeFirstRealImage(next);
   next = addStaticImageFallbackScript(next);
   return next;
 }
