@@ -4,11 +4,11 @@ const VERSION = 157;
 const FALLBACK_IMAGE = `/assets/home-hero-vicinal-v90-small.jpg?v=${VERSION}`;
 
 const SAFE_IMAGES = {
-  ardenne: `/assets/home-hero-ardenne-v88-q62.jpg?v=${VERSION}`,
-  carnet: `/assets/carnet-val-aisne-cover.png?v=${VERSION}`,
-  lettre: `/assets/lettre-dame-soy-cover.png?v=${VERSION}`,
+  ardenne: `/assets/home-hero-ardenne-v88.jpg?v=${VERSION}`,
+  carnet: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
+  lettre: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   logo: `/assets/logo-stock-sevrin-v90.jpg?v=${VERSION}`,
-  serment: `/assets/serment-blier-cover.png?v=${VERSION}`,
+  serment: `/assets/home-hero-ardenne-v88.jpg?v=${VERSION}`,
   vicinal: `/assets/home-hero-vicinal-v90.jpg?v=${VERSION}`,
   vicinalSmall: FALLBACK_IMAGE,
 };
