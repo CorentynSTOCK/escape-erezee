@@ -753,6 +753,7 @@ async function createDailyDataBackupIfNeededV134(options = {}) {
   const backups = await listDataBackups();
   const existing = backups.find((backup) => String(backup.name || '').startsWith(`escape-data-daily-${dateKey}-`));
   if (existing && !force) {
+    await pruneDataBackups();
     return { created: false, backup: existing, reason: 'already_exists' };
   }
 
