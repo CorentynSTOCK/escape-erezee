@@ -1,31 +1,101 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr-BE">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Escape Erezée - gestion et application joueur pour escape game extérieur."
+      content="Escape game extérieur à Erezée : réservez un parcours d'énigmes en équipe dans les villages et paysages de l'Ardenne belge."
     />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://escape-erezee.be/" />
+    <meta name="content-language" content="fr-BE, en, nl" />
+    <link rel="alternate" hreflang="fr-BE" href="https://escape-erezee.be/" />
+    <link rel="alternate" hreflang="en" href="https://escape-erezee.be/?lang=en" />
+    <link rel="alternate" hreflang="nl" href="https://escape-erezee.be/?lang=nl" />
+    <link rel="alternate" hreflang="x-default" href="https://escape-erezee.be/" />
+    <meta property="og:locale" content="fr_BE" />
+    <meta property="og:locale:alternate" content="en_GB" />
+    <meta property="og:locale:alternate" content="nl_BE" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Escape Erezée" />
+    <meta property="og:title" content="Escape Erezée - Escape game extérieur en Ardenne" />
+    <meta property="og:description" content="Parcours d'énigmes extérieurs à Erezée, à vivre en équipe avec code d'activation et suivi de progression." />
+    <meta property="og:url" content="https://escape-erezee.be/" />
+    <meta property="og:image" content="https://escape-erezee.be/assets/home-hero-vicinal-v90.jpg?v=157" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json" id="seo-home-structured-data">[{"@context":"https://schema.org","@type":"WebSite","name":"Escape Erezée","url":"https://escape-erezee.be/","inLanguage":"fr-BE"},{"@context":"https://schema.org","@type":"LocalBusiness","name":"Escape Erezée","url":"https://escape-erezee.be/","description":"Escape game extérieur à Erezée, en Ardenne belge, avec parcours d'énigmes à faire en équipe.","areaServed":{"@type":"Place","name":"Erezée, Belgique"},"priceRange":"€€"}]</script>
     <meta name="theme-color" content="#123c32" />
-    <title>Escape Erezée</title>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Escape Games" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Escape Erezée - Escape game extérieur en Ardenne</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=26" />
+    <link rel="apple-touch-icon" href="assets/icon.svg" />
+    <link rel="stylesheet" href="styles.css?v=189" />
+
+    <script id="local-seo-structured-data-v143" type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "LocalBusiness",
+            "@id": "https://escape-erezee.be/#business",
+            "name": "Stock & Sevrin Escape Games",
+            "url": "https://escape-erezee.be/",
+            "image": "https://escape-erezee.be/assets/logo-escape-game.png",
+            "description": "Escape game exterieur, chasse au tresor et activite familiale en Ardenne belge pres d'Erezee et Durbuy.",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Erezee",
+              "addressRegion": "Luxembourg",
+              "addressCountry": "BE"
+            },
+            "areaServed": ["Erezee", "Durbuy", "Ardenne belge"],
+            "priceRange": "€€"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://escape-erezee.be/#website",
+            "url": "https://escape-erezee.be/",
+            "name": "Stock & Sevrin Escape Games",
+            "publisher": { "@id": "https://escape-erezee.be/#business" },
+            "inLanguage": ["fr", "en", "nl"]
+          },
+          {
+            "@type": "Service",
+            "@id": "https://escape-erezee.be/#service",
+            "name": "Escape game exterieur en Ardenne",
+            "serviceType": "Escape game exterieur et chasse au tresor",
+            "provider": { "@id": "https://escape-erezee.be/#business" },
+            "areaServed": ["Erezee", "Durbuy", "Ardenne belge"],
+            "offers": { "@type": "Offer", "availability": "https://schema.org/InStock", "url": "https://escape-erezee.be/index.html#shop" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div class="app-shell">
       <aside class="side-nav" aria-label="Navigation principale">
-        <a class="brand" href="#shop" aria-label="Escape Erezée">
-          <span class="brand-mark" aria-hidden="true">EE</span>
+        <a class="brand" href="#home" aria-label="Stock et Sevrin Escape Games">
+          <span class="brand-mark brand-logo-mark" aria-hidden="true">
+            <img src="assets/logo-stock-sevrin-v90.jpg?v=157" alt="Logo Stock &amp; Sevrin Escape Games" decoding="async" loading="lazy" />
+          </span>
           <span>
-            <strong>Escape Erezée</strong>
-            <small>Jeu extérieur</small>
+            <strong>Stock &amp; Sevrin</strong>
+            <small>Escape Games</small>
           </span>
         </a>
 
         <nav class="main-nav" aria-label="Espaces">
-          <a class="nav-link" href="#shop" data-route="shop">
+          <a class="nav-link" href="#home" data-route="home">
+            <span aria-hidden="true">⌂</span>
+            Accueil
+          </a>
+<a class="nav-link" href="#shop" data-route="shop">
             <span aria-hidden="true">€</span>
             Boutique
           </a>
@@ -38,16 +108,100 @@
             Gestion
           </a>
         </nav>
-
-        <div class="side-note">
-          <strong>Code test</strong>
-          <button class="copy-code" type="button" data-copy-code="742-ERE-931">
-            742-ERE-931
-          </button>
-        </div>
-      </aside>
+</aside>
 
       <main>
+        <section class="view home-view" id="home-view" aria-labelledby="home-title">
+          <section class="home-hero" aria-label="Présentation de Stock et Sevrin Escape Games">
+            <img height="800" width="1200" class="home-hero-bg" src="/assets/experience/groupe-village-1200.jpg?v=181" alt="Groupe en aventure avec un smartphone dans un village ardennais" decoding="async" loading="eager" fetchpriority="high" />
+            <div class="home-hero-overlay" aria-hidden="true"></div>
+            <div class="home-hero-content">
+              <img class="home-hero-logo" src="assets/logo-stock-sevrin-v90.jpg?v=157" alt="Stock &amp; Sevrin Escape Games" decoding="async" loading="lazy" />
+              <p class="section-label">Escape game extérieur à Erezée</p>
+              <h1 id="home-title">Une aventure grandeur nature au cœur de la région</h1>
+              <p>
+                Explorez Erezée en équipe, avancez de lieu en lieu grâce à la carte,
+                débloquez les énigmes sur place et tentez de terminer le parcours avant
+                la fin du chrono.
+              </p>
+              <div class="home-actions">
+                <a class="primary-button" href="#shop">Voir les parcours</a>
+                <a class="secondary-button" href="#player">J’ai déjà un code</a>
+                <button class="secondary-button install-app-button" type="button" id="install-app-button">
+                  Installer l’application
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="home-band" aria-labelledby="home-concept-title">
+            <div>
+              <p class="section-label">Le concept</p>
+              <h2 id="home-concept-title">Un jeu d’énigmes qui se vit dehors</h2>
+            </div>
+            <p data-static-i18n-v128><span data-lang-static="fr">Chaque parcours vous emmène dans les environs d’Erezée avec une suite d’étapes à rejoindre réellement. Une fois dans la bonne zone, l’application débloque l’énigme suivante: réponse écrite, observation, photo ou indice à utiliser au bon moment.</span><span data-lang-static="en">Each route takes you around Erezée through a series of real places to reach. Once you are in the right area, the app unlocks the next puzzle: written answer, observation, photo or clue to use at the right moment.</span><span data-lang-static="nl">Elke route neemt je mee rond Erezée via echte plekken die je moet bereiken. Zodra je in de juiste zone bent, ontgrendelt de app het volgende raadsel: geschreven antwoord, observatie, foto of aanwijzing op het juiste moment.</span></p>
+          </section>
+
+          <section class="home-how" aria-labelledby="home-how-title">
+    <p class="eyebrow">Comment ça marche ?</p>
+    <h2 id="home-how-title">Une aventure en quatre étapes</h2>
+    <div class="steps">
+      <article><span>1</span><h3>Achetez votre parcours</h3><p>Recevez votre code d'accès par email.</p></article>
+      <article><span>2</span><h3>Rendez-vous au point de départ</h3><p>Votre smartphone vous guide.</p></article>
+      <article><span>3</span><h3>Résolvez les énigmes</h3><p>Débloquez chaque étape du parcours.</p></article>
+      <article><span>4</span><h3>Terminez avant la fin du temps</h3><p>Affrontez le classement des meilleurs joueurs.</p></article>
+    </div>
+  </section>
+
+          <section class="home-practical" aria-labelledby="home-practical-title">
+            <div>
+              <p class="section-label">Avant de partir</p>
+              <h2 id="home-practical-title">Prévoyez juste l’essentiel</h2>
+            </div>
+            <ul>
+              <li>Un smartphone chargé avec la géolocalisation autorisée.</li>
+              <li>Une équipe prête à observer les détails autour d’elle.</li>
+              <li>Des chaussures adaptées à une balade extérieure.</li>
+              <li>Le code reçu après l’achat du parcours.</li>
+            </ul>
+          </section>
+<section class="home-seo-reviews" aria-labelledby="home-seo-reviews-title">
+    <p class="eyebrow">Avis clients</p>
+    <h2 id="home-seo-reviews-title">Ils ont testé l'aventure</h2>
+    <div class="review-grid">
+      <figure><div><span aria-label="5 étoiles">★★★★★</span></div><blockquote>Super activité en famille, les enfants ont adoré !</blockquote><figcaption>- Sophie</figcaption></figure>
+      <figure><div><span aria-label="5 étoiles">★★★★★</span></div><blockquote>Une belle découverte de la région tout en s'amusant.</blockquote><figcaption>- Julien</figcaption></figure>
+      <figure><div><span aria-label="5 étoiles">★★★★★</span></div><blockquote>Le parcours motive tout le monde à observer les détails.</blockquote><figcaption>- Nathalie</figcaption></figure>
+    </div>
+  </section>
+          <section class="home-seo-faq" aria-labelledby="home-seo-faq-title">
+    <p class="eyebrow">FAQ</p>
+    <h2 id="home-seo-faq-title">Questions fréquentes</h2>
+    <details><summary>Faut-il internet ?</summary><p>Oui, une connexion mobile est recommandée pour charger la carte, synchroniser la progression et valider les étapes.</p></details>
+    <details><summary>Combien de temps durent les parcours ?</summary><p data-static-i18n-v128><span data-lang-static="fr">La durée dépend du parcours et du rythme de l'équipe. Prévoyez généralement une activité de plusieurs dizaines de minutes à quelques heures.</span><span data-lang-static="en">The duration depends on the route and the team pace. Plan for an outdoor activity lasting from several dozen minutes to a few hours.</span><span data-lang-static="nl">De duur hangt af van de route en het tempo van het team. Reken meestal op een buitenactiviteit van enkele tientallen minuten tot enkele uren.</span></p></details>
+    <details><summary>Peut-on jouer avec des enfants ?</summary><p>Oui, les enfants peuvent participer avec des adultes. Les énigmes demandent surtout observation, logique et coopération.</p></details>
+    <details><summary>Les chiens sont-ils autorisés ?</summary><p data-static-i18n-v128><span data-lang-static="fr">Les parcours se déroulent dehors. Les chiens peuvent accompagner l'équipe si les lieux traversés, la météo et la tenue en laisse le permettent.</span><span data-lang-static="en">The routes take place outdoors. Dogs can join the team if the places crossed, the weather and leash rules allow it.</span><span data-lang-static="nl">De routes spelen zich buiten af. Honden kunnen mee als de plaatsen, het weer en de leibandregels dat toelaten.</span></p></details>
+    <details><summary>Que faut-il prévoir ?</summary><p>Un smartphone chargé, des chaussures adaptées à la marche, le code reçu après achat et une équipe prête à observer.</p></details>
+  </section>
+          <section class="home-seo-links" aria-labelledby="home-seo-links-title">
+            <div>
+              <p class="section-label">Explorer la région</p>
+              <h2 id="home-seo-links-title">Activités et idées de sorties</h2>
+            </div>
+            <div class="home-link-grid">
+              <a href="/escape-game-exterieur-ardenne.html">Escape game extérieur Ardenne</a>
+              <a href="/activite-famille-ardenne.html">Activité famille Ardenne</a>
+              <a href="/chasse-au-tresor-ardenne.html">Chasse au trésor Ardenne</a>
+              <a href="/activite-touristique-erezee.html">Activité touristique Érezée</a>
+              <a href="/activite-pres-de-durbuy.html">Activité près de Durbuy</a>
+              <a data-seo-route-link-v111 href="/parcours/la-lettre-de-la-dame-de-soy.html">Parcours : La Lettre de la Dame de Soy</a>
+              <a data-seo-route-link-v111 href="/parcours/sur-les-traces-du-vicinal.html">Parcours : Sur les Traces du Vicinal</a>
+              <a data-seo-route-link-v111 href="/parcours/les-balises-perdues-de-blier.html">Parcours : Les Balises Perdues de Blier</a>
+              <a href="/blog/">Blog et actualités</a>
+            </div>
+          </section>
+        </section>
+
         <section class="view shop-view" id="shop-view" aria-labelledby="shop-page-title">
           <header class="topbar shop-topbar">
             <div>
@@ -58,8 +212,7 @@
               <a class="secondary-button" href="#player">J’ai déjà un code</a>
             </div>
           </header>
-
-          <section class="shop-panel" aria-labelledby="shop-title">
+<section class="shop-panel" aria-labelledby="shop-title">
             <div class="shop-heading">
               <div>
                 <p class="section-label">Parcours en vente</p>
@@ -67,6 +220,35 @@
               </div>
             </div>
             <div class="shop-list" id="shop-list"></div>
+              <section class="hunting-warning shop-hunting-warning" data-hunting-warning-v96 aria-label="Prudence pendant les périodes de chasse">
+                <strong>Prudence pendant les périodes de chasse</strong>
+                <p>Avant de partir, vérifiez les informations locales, respectez les panneaux sur place et les chemins fermés. Si une battue ou une zone interdite est signalée, reportez le parcours.</p>
+              </section>
+              <section class="shop-reassurance" data-shop-reassurance-v130 aria-labelledby="shop-reassurance-title">
+                <div class="shop-reassurance-head">
+                  <p class="section-label" data-static-i18n-v130><span data-lang-static="fr">Avant d’acheter</span><span data-lang-static="en">Before buying</span><span data-lang-static="nl">Voor je koopt</span></p>
+                  <h2 id="shop-reassurance-title" data-static-i18n-v130><span data-lang-static="fr">Tout est prêt pour jouer dehors</span><span data-lang-static="en">Everything is ready for outdoor play</span><span data-lang-static="nl">Alles is klaar om buiten te spelen</span></h2>
+                  <p data-static-i18n-v130><span data-lang-static="fr">Après l’achat, votre code ouvre le parcours choisi. Gardez simplement votre téléphone chargé et rejoignez le point de départ indiqué.</span><span data-lang-static="en">After purchase, your code opens the selected route. Just keep your phone charged and go to the indicated starting point.</span><span data-lang-static="nl">Na aankoop opent je code de gekozen route. Zorg gewoon voor een opgeladen telefoon en ga naar het aangeduide startpunt.</span></p>
+                </div>
+                <div class="shop-reassurance-grid">
+                  <article>
+                    <strong>1</strong>
+                    <h3 data-static-i18n-v130><span data-lang-static="fr">Code par email</span><span data-lang-static="en">Code by email</span><span data-lang-static="nl">Code per e-mail</span></h3>
+                    <p data-static-i18n-v130><span data-lang-static="fr">Le code d’accès est envoyé après le paiement et reste lié au parcours acheté.</span><span data-lang-static="en">The access code is sent after payment and stays linked to the purchased route.</span><span data-lang-static="nl">De toegangscode wordt na betaling verzonden en blijft gekoppeld aan de gekochte route.</span></p>
+                  </article>
+                  <article>
+                    <strong>2</strong>
+                    <h3 data-static-i18n-v130><span data-lang-static="fr">Départ vérifié par GPS</span><span data-lang-static="en">GPS-checked start</span><span data-lang-static="nl">Start gecontroleerd met gps</span></h3>
+                    <p data-static-i18n-v130><span data-lang-static="fr">La page briefing vous guide vers la zone de départ avant de lancer l’aventure.</span><span data-lang-static="en">The briefing page guides you to the starting area before the adventure begins.</span><span data-lang-static="nl">De briefingpagina gidst je naar de startzone voordat het avontuur begint.</span></p>
+                  </article>
+                  <article>
+                    <strong>3</strong>
+                    <h3 data-static-i18n-v130><span data-lang-static="fr">Une équipe, un smartphone</span><span data-lang-static="en">One team, one smartphone</span><span data-lang-static="nl">Een team, een smartphone</span></h3>
+                    <p data-static-i18n-v130><span data-lang-static="fr">Un téléphone avec batterie, internet mobile et géolocalisation suffit pour toute l’équipe.</span><span data-lang-static="en">One phone with battery, mobile internet and location access is enough for the whole team.</span><span data-lang-static="nl">Een telefoon met batterij, mobiel internet en locatie is genoeg voor het hele team.</span></p>
+                  </article>
+                </div>
+              </section>
+
             <p class="shop-empty" id="shop-empty" role="status"></p>
           </section>
         </section>
@@ -126,14 +308,55 @@
                   <button class="primary-button" type="submit">Enregistrer</button>
                 </div>
               </form>
+              <section class="briefing-panel is-hidden" id="briefing-panel" aria-labelledby="briefing-title">
+                <p class="section-label">Briefing</p>
+                <h2 id="briefing-title">Votre mission</h2>
+                <p id="briefing-text"></p>
+                <article class="briefing-map-card" aria-label="Point de d&eacute;part du parcours">
+                  <div class="map-canvas briefing-map" id="briefing-map" aria-label="Carte du point de d&eacute;part">
+                    <div class="map-tiles" aria-hidden="true"></div>
+                    <div class="map-layer" aria-hidden="true"></div>
+                    <div class="map-attribution">&copy; OpenStreetMap</div>
+                  </div>
+                  <div class="briefing-start-row">
+                    <div>
+                      <strong>Point de d&eacute;part</strong>
+                      <p id="briefing-start-text"></p>
+                    </div>
+                    <a class="secondary-button start-directions-button" id="briefing-directions-link" href="#" target="_blank" rel="noopener">Itin&eacute;raire</a>
+                  </div>
+                </article>
+                <div class="briefing-location-status is-blocked" id="briefing-location-status" role="status" aria-live="polite">
+                  Autorisez la g&eacute;olocalisation pour v&eacute;rifier votre pr&eacute;sence au point de d&eacute;part.
+                </div>
+                <button class="secondary-button full-button" type="button" id="briefing-locate-button">Me localiser au d&eacute;part</button>
 
-              <div class="route-hero">
-                <div>
-                  <p class="route-place" id="route-area">Erezée</p>
+                <button class="primary-button full-button" type="button" id="start-adventure-button">Commencer l&rsquo;aventure</button>
+              </section>
+              <div class="route-hero" id="route-hero">
+                <div class="route-hero-copy">
+                  <p class="route-kicker">Parcours en cours</p>
+                  <p class="route-place" id="route-area">Erez&eacute;e</p>
                   <h2 id="route-title">Le Secret du Tramway</h2>
+                  <div class="route-meta" aria-label="Informations du parcours">
+                    <span id="route-duration">90 min</span>
+                                        <span id="route-distance">3,2 km</span>
+<span id="route-puzzle-count">4 &eacute;nigmes</span>
+                    <span id="route-current-step">&Eacute;tape 1</span>
+                  </div>
                 </div>
                 <span class="status-pill" id="game-status">En cours</span>
               </div>
+
+
+              <article class="start-point-card" id="start-point-card" aria-labelledby="start-point-title">
+                <div>
+                  <p class="section-label">Point de d&eacute;part</p>
+                  <h3 id="start-point-title">Avant de commencer</h3>
+                  <p id="start-point-text">Le point de d&eacute;part du parcours appara&icirc;tra ici.</p>
+                </div>
+                <a class="secondary-button start-directions-button" id="start-directions-link" href="#" target="_blank" rel="noopener">Ouvrir l&rsquo;itin&eacute;raire</a>
+              </article>
 
               <div class="progress-block">
                 <div class="progress-header">
@@ -170,18 +393,38 @@
               </section>
 
               <article class="map-panel" aria-label="Carte du parcours">
+                <button class="navigation-close-button" id="player-navigation-close" type="button" aria-label="Quitter le mode guidage">Quitter le guidage</button>
                 <div class="map-canvas player-map" id="player-map" aria-label="Carte terrain">
                   <div class="map-tiles" aria-hidden="true"></div>
                   <div class="map-layer" aria-hidden="true"></div>
                   <div class="map-attribution">© OpenStreetMap</div>
+                  <div class="player-map-north" id="player-map-north" aria-hidden="true"><span>↑</span><b>N</b></div>
+                </div>
+                <div class="player-navigation-summary" id="player-navigation-summary" aria-live="polite">
+                  <div class="player-navigation-arrow-block">
+                    <span class="player-navigation-arrow" id="player-navigation-arrow" aria-hidden="true">↑</span>
+                    <small id="player-navigation-direction">Direction générale</small>
+                  </div>
+                  <div class="player-navigation-distance-block">
+                    <strong id="player-navigation-distance">--</strong>
+                    <span id="player-navigation-distance-label">Activez votre position</span>
+                    <small id="player-navigation-signal"></small>
+                  </div>
+                </div>
+                <p class="player-navigation-safety" id="player-navigation-safety">Suivez les chemins autorisés et arrêtez-vous pour consulter l’écran.</p>
+                <div class="player-map-guide" id="player-map-guidance" aria-live="polite">
+                  <div class="player-map-legend" aria-label="Légende de la carte">
+                    <span><i class="legend-dot legend-player" aria-hidden="true"></i><b id="player-map-legend-you">Vous</b></span>
+                    <span><i class="legend-dot legend-target" aria-hidden="true"></i><b id="player-map-legend-target">Prochaine étape</b></span>
+                  </div>
+                  <div class="player-map-guidance-copy">
+                    <strong id="player-map-guidance-status">Activez votre position pour commencer le guidage.</strong>
+                    <span id="player-map-guidance-detail"></span>
+                  </div>
                 </div>
                 <div class="map-actions">
-                  <button class="secondary-button" type="button" id="locate-button">
-                    Me géolocaliser
-                  </button>
-                  <button class="text-button" type="button" id="demo-unlock-button">
-                    Démo zone
-                  </button>
+                  <button class="secondary-button" type="button" id="locate-button">Me géolocaliser</button>
+                  <button class="primary-button player-navigation-button" id="player-navigation-button" type="button" aria-pressed="false">Mode guidage</button>
                 </div>
                 <p class="distance-note" id="distance-note" role="status"></p>
               </article>
@@ -245,9 +488,6 @@
                 <button class="secondary-button" type="button" id="admin-logout-button">
                   Se déconnecter
                 </button>
-                <button class="secondary-button" type="button" id="seed-button">
-                  Réinitialiser la démo
-                </button>
                 <button class="primary-button" type="button" id="generate-code-button">
                   Créer un code
                 </button>
@@ -287,7 +527,11 @@
                   <input name="duration" required type="number" min="15" value="90" />
                 </label>
                 <label>
-                  Prix par personne
+                  Distance approximative
+                  <input name="distance" type="text" placeholder="3,2 km" value="3,2 km" />
+                </label>
+                <label>
+                  Prix par &eacute;quipe
                   <input name="price" required type="number" min="0" step="0.01" value="18" />
                 </label>
                 <label class="check-row">
@@ -298,6 +542,35 @@
                   Description
                   <textarea name="description" required placeholder="Description courte du parcours"></textarea>
                 </label>
+                <label>
+                  Texte de briefing
+                  <textarea name="briefing-text" placeholder="Texte lu avant le lancement du chrono"></textarea>
+                </label>
+                <label>
+                  Texte de fin de parcours
+                  <textarea name="finish-message" placeholder="Message affich&eacute; quand l&rsquo;&eacute;quipe gagne"></textarea>
+                </label>
+                <div class="start-editor-block">
+                  <p class="section-label">D&eacute;part joueur</p>
+                  <label>
+                    Lieu de d&eacute;part
+                    <input name="start-place" placeholder="Parking, place ou point de rendez-vous" />
+                  </label>
+                  <label>
+                    Adresse de d&eacute;part
+                    <input name="start-address" placeholder="Rue, num&eacute;ro, Erez&eacute;e" />
+                  </label>
+                  <div class="coordinate-grid">
+                    <label>
+                      Latitude d&eacute;part
+                      <input name="start-lat" type="number" step="0.00001" placeholder="50.29285" />
+                    </label>
+                    <label>
+                      Longitude d&eacute;part
+                      <input name="start-lng" type="number" step="0.00001" placeholder="5.55765" />
+                    </label>
+                  </div>
+                </div>
                 <label class="file-input route-image-uploader">
                   Image de boutique
                   <input name="cover-image" type="file" accept="image/*" />
@@ -329,9 +602,13 @@
                   Durée en minutes
                   <input id="route-details-duration" name="route-details-duration" type="number" min="1" required />
                 </label>
+                  <label>
+                    Distance approximative
+                    <input id="route-details-distance" name="route-details-distance" type="text" placeholder="3,2 km" />
+                  </label>
                 <div class="coordinate-grid">
                   <label>
-                    Prix par personne
+                    Prix par &eacute;quipe
                     <input id="route-details-price" name="route-details-price" type="number" min="0" step="0.01" required />
                   </label>
                   <label class="check-row">
@@ -343,6 +620,37 @@
                   Description
                   <textarea id="route-details-description" name="route-details-description" required></textarea>
                 </label>
+                <label>
+                  Texte de briefing
+                  <textarea id="route-details-briefing" name="route-details-briefing" placeholder="Texte lu avant le lancement du chrono"></textarea>
+                </label>
+                <label>
+                  Texte de fin de parcours
+                  <textarea id="route-details-finish-message" name="route-details-finish-message" placeholder="Message affich&eacute; quand l&rsquo;&eacute;quipe gagne"></textarea>
+                </label>
+                <div class="start-editor-block">
+                  <p class="section-label">D&eacute;part joueur</p>
+                  <div class="coordinate-grid">
+                    <label>
+                      Lieu de d&eacute;part
+                      <input id="route-details-start-place" name="route-details-start-place" placeholder="Parking, place ou point de rendez-vous" />
+                    </label>
+                    <label>
+                      Adresse de d&eacute;part
+                      <input id="route-details-start-address" name="route-details-start-address" placeholder="Rue, num&eacute;ro, Erez&eacute;e" />
+                    </label>
+                  </div>
+                  <div class="coordinate-grid">
+                    <label>
+                      Latitude d&eacute;part
+                      <input id="route-details-start-lat" name="route-details-start-lat" type="number" step="0.00001" placeholder="50.29285" />
+                    </label>
+                    <label>
+                      Longitude d&eacute;part
+                      <input id="route-details-start-lng" name="route-details-start-lng" type="number" step="0.00001" placeholder="5.55765" />
+                    </label>
+                  </div>
+                </div>
                 <label class="file-input route-image-uploader">
                   Image de boutique
                   <input id="route-details-image" name="route-details-image" type="file" accept="image/*" />
@@ -395,6 +703,10 @@
                 <label>
                   Texte affiché au joueur
                   <textarea id="content-question" name="content-question" required></textarea>
+                </label>
+                <label>
+                  Message d&rsquo;arriv&eacute;e dans la zone
+                  <textarea id="content-arrival-message" name="content-arrival-message" placeholder="Exemple : Vous y &ecirc;tes, observez la fa&ccedil;ade devant vous."></textarea>
                 </label>
                 <label class="file-input puzzle-image-uploader">
                   Image de l’énigme
@@ -451,6 +763,10 @@
                 <label>
                   Texte affiché au joueur
                   <textarea name="question" required placeholder="Votre énigme complète"></textarea>
+                </label>
+                <label>
+                  Message d&rsquo;arriv&eacute;e dans la zone
+                  <textarea name="arrival-message" placeholder="Message affich&eacute; quand l&rsquo;&eacute;quipe arrive au bon endroit"></textarea>
                 </label>
                 <label class="file-input">
                   Image de l’énigme
@@ -534,7 +850,14 @@
                   <p class="section-label">Équipes</p>
                   <h2 id="teams-heading">Progression en direct</h2>
                 </div>
+                <a class="secondary-button" href="suivi.html" id="open-tracking-page">Grand écran</a>
               </div>
+              <div class="map-canvas live-team-map" id="team-live-map" aria-label="Carte des equipes en direct">
+                <div class="map-tiles" aria-hidden="true"></div>
+                <div class="map-layer" aria-hidden="true"></div>
+                <div class="map-attribution">© OpenStreetMap</div>
+              </div>
+              <div class="sync-health-summary" id="admin-sync-health-summary" role="status" aria-live="polite"></div>
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -543,7 +866,10 @@
                       <th>Code</th>
                       <th>Parcours</th>
                       <th>Progression</th>
+                      <th>Position</th>
+                      <th>Synchro</th>
                       <th>État</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody id="team-table"></tbody>
@@ -566,6 +892,17 @@
       </main>
     </div>
 
+    <div class="arrival-modal is-hidden" id="arrival-modal" role="dialog" aria-modal="true" aria-labelledby="arrival-modal-title">
+      <button class="arrival-modal-backdrop" type="button" aria-label="Fermer le message" data-close-arrival-modal></button>
+      <section class="arrival-modal-panel">
+        <button class="arrival-modal-close" type="button" id="arrival-modal-close" aria-label="Fermer le message">&times;</button>
+        <p class="section-label">Zone atteinte</p>
+        <h2 id="arrival-modal-title">Vous y &ecirc;tes</h2>
+        <p id="arrival-modal-message"></p>
+        <button class="primary-button full-button" type="button" id="arrival-modal-ok">Continuer</button>
+      </section>
+    </div>
+
     <div class="image-viewer is-hidden" id="image-viewer" role="dialog" aria-modal="true" aria-labelledby="image-viewer-title">
       <button class="image-viewer-backdrop" type="button" aria-label="Fermer l’image" data-close-image-viewer></button>
       <div class="image-viewer-panel">
@@ -582,13 +919,29 @@
           </div>
         </div>
         <div class="image-viewer-stage" id="image-viewer-stage">
-          <img id="image-viewer-img" alt="" />
+          <img id="image-viewer-img" alt="" decoding="async" loading="lazy" />
         </div>
       </div>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="app.js?v=26" type="module"></script>
+    <script src="app.js?v=189"></script>
+    <script id="image-health-v157">
+(function () {
+  var fallback = "/assets/home-hero-vicinal-v90-small.jpg?v=157";
+  function applyFallback(img) {
+    if (!img || img.dataset.imageHealthFallback === "1") return;
+    var src = img.currentSrc || img.getAttribute("src") || "";
+    if (!src || src.indexOf("data:") === 0 || src.indexOf("tile.openstreetmap.org") !== -1) return;
+    img.dataset.imageHealthFallback = "1";
+    img.classList.add("image-fallback-applied");
+    img.src = fallback;
+  }
+  document.addEventListener("error", function (event) {
+    if (event.target && event.target.tagName === "IMG") applyFallback(event.target);
+  }, true);
+})();
+</script>
   </body>
 </html>

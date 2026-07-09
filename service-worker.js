@@ -1,11 +1,14 @@
-const CACHE_NAME = "escape-erezee-v42";
+const CACHE_NAME = "escape-erezee-v189";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=172271170069968865564463360059957",
+  "./app.js?v=172271170069968865564463360059957",
   "./manifest.webmanifest",
   "./assets/icon.svg",
+  "./assets/home-hero-vicinal-v90.jpg?v=90",
+  "./assets/logo-stock-sevrin-v90.jpg?v=90",
+  "./assets/logo-escape.jpg?v=42",
   "./assets/logo-escape.jpg?v=42",
 ];
 
@@ -25,11 +28,22 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+  const isApiRequest = url.pathname.startsWith("/api/");
+  const isFreshAsset = /.(?:js|css)$/.test(url.pathname);
+
+  if (isApiRequest || isFreshAsset) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
+    return;
+  }
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match("./index.html")),
     );
     return;
   }
+
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
 });

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>Suivi des parcours - Escape Erezée</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <style>
@@ -540,6 +540,7 @@
       let data = { routes: [], teams: [], codes: [] };
       let selectedFilter = loadFilter();
       let mapZoomOverride = null;
+      let currentMapZoom = 16;
       let lastRenderOptions = null;
       let refreshTimer = null;
 
@@ -699,10 +700,22 @@
           .filter(Boolean);
       }
 
+      /* suivi-filter-v102 */
       function selectedIdsFor(entries) {
         const ids = entries.map((entry) => entry.team.id);
         if (!Array.isArray(selectedFilter)) return new Set(ids);
-        return new Set(selectedFilter.filter((id) => ids.includes(id)));
+
+        const filteredIds = selectedFilter.filter((id) => ids.includes(id));
+        if (ids.length && selectedFilter.length && !filteredIds.length) {
+          saveFilter(null);
+          return new Set(ids);
+        }
+
+        if (filteredIds.length !== selectedFilter.length) {
+          saveFilter(filteredIds.length === ids.length ? null : filteredIds);
+        }
+
+        return new Set(filteredIds);
       }
 
       function render() {
@@ -816,6 +829,7 @@
         const height = Math.max(Math.round(rect.height), 240);
         const fit = getFitView(entries, width, height);
         const zoom = clampZoom(mapZoomOverride ?? fit.zoom);
+        currentMapZoom = zoom;
         const center = fit.center;
         lastRenderOptions = { entries, emptyMessage };
 
@@ -832,7 +846,7 @@
           for (let y = startY; y <= endY; y += 1) {
             if (y < 0 || y >= maxTile) continue;
             const wrappedX = ((x % maxTile) + maxTile) % maxTile;
-            tiles.push('<img class="map-tile" alt="" src="https://tile.openstreetmap.org/' + zoom + '/' + wrappedX + '/' + y + '.png" style="left:' + Math.round(x * TILE_SIZE - topLeft.x) + 'px;top:' + Math.round(y * TILE_SIZE - topLeft.y) + 'px" />');
+            tiles.push('<img class="map-tile" alt="" src="https://tile.openstreetmap.org/' + zoom + '/' + wrappedX + '/' + y + '.png" style="left:' + Math.round(x * TILE_SIZE - topLeft.x) + 'px;top:' + Math.round(y * TILE_SIZE - topLeft.y) + 'px" decoding="async" loading="eager" fetchpriority="high" />');
           }
         }
 
@@ -880,8 +894,8 @@
       els.selectAll.addEventListener("click", () => { saveFilter(null); render(); });
       els.clearAll.addEventListener("click", () => { saveFilter([]); render(); });
       els.refreshNow.addEventListener("click", refreshData);
-      els.zoomIn.addEventListener("click", () => { mapZoomOverride = clampZoom((mapZoomOverride ?? 16) + 1); rerenderMap(); });
-      els.zoomOut.addEventListener("click", () => { mapZoomOverride = clampZoom((mapZoomOverride ?? 16) - 1); rerenderMap(); });
+      els.zoomIn.addEventListener("click", () => { mapZoomOverride = clampZoom(currentMapZoom + 1); rerenderMap(); });
+      els.zoomOut.addEventListener("click", () => { mapZoomOverride = clampZoom(currentMapZoom - 1); rerenderMap(); });
       els.fullscreen.addEventListener("click", () => {
         const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
         const requestFullscreen = els.map.requestFullscreen || els.map.webkitRequestFullscreen;
@@ -901,5 +915,21 @@
         startAutoRefresh();
       });
     </script>
+    <script id="image-health-v157">
+(function () {
+  var fallback = "/assets/home-hero-vicinal-v90-small.jpg?v=157";
+  function applyFallback(img) {
+    if (!img || img.dataset.imageHealthFallback === "1") return;
+    var src = img.currentSrc || img.getAttribute("src") || "";
+    if (!src || src.indexOf("data:") === 0 || src.indexOf("tile.openstreetmap.org") !== -1) return;
+    img.dataset.imageHealthFallback = "1";
+    img.classList.add("image-fallback-applied");
+    img.src = fallback;
+  }
+  document.addEventListener("error", function (event) {
+    if (event.target && event.target.tagName === "IMG") applyFallback(event.target);
+  }, true);
+})();
+</script>
   </body>
 </html>

@@ -1,13 +1,23 @@
 {
-  "name": "Escape Erezée",
-  "short_name": "Escape Erezée",
-  "description": "Application joueur et gestion PC pour escape game extérieur.",
-  "start_url": "./index.html#player",
-  "scope": "./",
+  "id": "/",
+  "name": "Stock & Sevrin Escape Games",
+  "short_name": "Escape Games",
+  "description": "Application joueur pour escape game extérieur à Erezée.",
+  "lang": "fr-BE",
+  "start_url": "/index.html#home",
+  "scope": "/",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#f4f7f5",
   "theme_color": "#123c32",
   "orientation": "portrait",
+  "categories": [
+    "games",
+    "travel"
+  ],
   "icons": [
     {
       "src": "assets/icon.svg",
