@@ -9,7 +9,7 @@ const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = globalThis.process?.env?.DATA_DIR || path.join(ROOT_DIR, "data");
 const DATA_FILE = path.join(DATA_DIR, "escape-data.json");
 const DATA_BACKUP_DIR = path.join(DATA_DIR, "backups");
-const MAX_DATA_BACKUPS = 30;
+const MAX_DATA_BACKUPS = 5;
 const MAX_BODY_SIZE = 30 * 1024 * 1024;
 const ADMIN_PASSWORD = globalThis.process?.env?.ADMIN_PASSWORD || "ErezeeGestion-2026!";
 const ODOO_WEBHOOK_SECRET = globalThis.process?.env?.ODOO_WEBHOOK_SECRET || "";
@@ -374,12 +374,17 @@ async function readStoredData() {
 async function pruneDataBackups() {
   try {
     const entries = await readdir(DATA_BACKUP_DIR, { withFileTypes: true });
-    const files = entries
-      .filter((entry) => entry.isFile() && entry.name.startsWith("escape-data-before-write-") && entry.name.endsWith(".json"))
-      .map((entry) => entry.name)
-      .sort();
-    const excess = files.slice(0, Math.max(0, files.length - MAX_DATA_BACKUPS));
-    await Promise.all(excess.map((file) => unlink(path.join(DATA_BACKUP_DIR, file)).catch(() => {})));
+    const backups = await Promise.all(entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith("escape-data-") && entry.name.endsWith(".json"))
+      .map(async (entry) => {
+        const filePath = path.join(DATA_BACKUP_DIR, entry.name);
+        const fileStat = await stat(filePath);
+        return { name: entry.name, modifiedAt: fileStat.mtimeMs };
+      }));
+    const excess = backups
+      .sort((a, b) => Number(b.modifiedAt || 0) - Number(a.modifiedAt || 0))
+      .slice(MAX_DATA_BACKUPS);
+    await Promise.all(excess.map((backup) => unlink(path.join(DATA_BACKUP_DIR, backup.name)).catch(() => {})));
   } catch (error) {
     if (error.code !== "ENOENT") console.warn("Nettoyage des sauvegardes impossible.", error);
   }
@@ -506,6 +511,7 @@ async function createAdminRobustnessBackupV167(reason = "manual") {
   const fileName = "escape-data-" + safeReason + "-" + stamp + ".json";
   await writeFile(path.join(DATA_BACKUP_DIR, fileName), raw.endsWith("\n") ? raw : raw + "\n", "utf8");
   const fileStat = await stat(path.join(DATA_BACKUP_DIR, fileName));
+  await pruneDataBackups();
   return { name: fileName, size: fileStat.size, modifiedAt: fileStat.mtimeMs };
 }
 
@@ -602,6 +608,7 @@ async function createManualDataBackup() {
   const filePath = path.join(DATA_BACKUP_DIR, fileName);
   await writeFile(filePath, raw.endsWith("\n") ? raw : `${raw}\n`, "utf8");
   const fileStat = await stat(filePath);
+  await pruneDataBackups();
   return { name: fileName, size: fileStat.size, modifiedAt: fileStat.mtimeMs };
 }
 
@@ -680,6 +687,7 @@ async function createPreRestoreDataBackup() {
   const filePath = path.join(DATA_BACKUP_DIR, fileName);
   await writeFile(filePath, raw.endsWith('\n') ? raw : `${raw}\n`, 'utf8');
   const fileStat = await stat(filePath);
+  await pruneDataBackups();
   return { name: fileName, size: fileStat.size, modifiedAt: fileStat.mtimeMs };
 }
 
@@ -707,8 +715,6 @@ function sendDataBackupFile(response, backup) {
 /* scheduled-backup-v134 */
 
 const DAILY_BACKUP_CHECK_INTERVAL_MS_V134 = 60 * 60 * 1000;
-
-const MAX_DAILY_DATA_BACKUPS_V134 = 45;
 
 const DAILY_BACKUP_TIME_ZONE_V190 = String(globalThis.process?.env?.DAILY_BACKUP_TIME_ZONE || globalThis.process?.env?.BACKUP_TIME_ZONE || "Europe/Brussels").trim() || "Europe/Brussels";
 
@@ -738,11 +744,7 @@ function isDailyBackupV134(backup) {
 }
 
 async function pruneDailyDataBackupsV134() {
-  const backups = (await listDataBackups())
-    .filter(isDailyBackupV134)
-    .sort((a, b) => Number(b.modifiedAt || 0) - Number(a.modifiedAt || 0));
-  const excess = backups.slice(MAX_DAILY_DATA_BACKUPS_V134);
-  await Promise.all(excess.map((backup) => unlink(path.join(DATA_BACKUP_DIR, backup.name)).catch(() => {})));
+  await pruneDataBackups();
 }
 
 async function createDailyDataBackupIfNeededV134(options = {}) {
