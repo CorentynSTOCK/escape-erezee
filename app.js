@@ -582,6 +582,25 @@ const ADMIN_LIVE_URL_V189 = "/api/admin/live";
 const PLAYER_GUIDANCE_GPS_INTERVAL_V189 = 1000;
 const PLAYER_IDLE_GPS_INTERVAL_V189 = 60000;
 let playerLastProcessedGpsAtV189 = 0;
+let adminFullDataLoadedV191 = false;
+
+function routeLooksLikePublicCatalogV191(route) {
+  const puzzles = Array.isArray(route?.puzzles) ? route.puzzles : [];
+  if (!puzzles.length) return false;
+  return puzzles.every((puzzle) => (
+    String(puzzle?.id || "").startsWith("public-")
+    && !String(puzzle?.title || "").trim()
+    && !String(puzzle?.question || "").trim()
+    && !String(puzzle?.place || "").trim()
+    && !Number.isFinite(Number(puzzle?.lat))
+    && !Number.isFinite(Number(puzzle?.lng))
+  ));
+}
+
+function hasSparseAdminRouteDataV191() {
+  const routes = Array.isArray(data?.routes) ? data.routes : [];
+  return routes.some(routeLooksLikePublicCatalogV191);
+}
 
 function playerTrackingOptionsV189() {
   const guidance = Boolean(playerNavigationActiveV183);
@@ -658,6 +677,7 @@ async function syncDataFromServer() {
       const response = await fetchDataFromServerWithRetry();
       if (response.status === 401 || response.status === 403) {
         adminAuthenticated = false;
+        adminFullDataLoadedV191 = false;
         adminSessionChecked = true;
         initialAdminServerSyncPending = false;
         renderAdminAccess();
@@ -667,6 +687,7 @@ async function syncDataFromServer() {
       const serverData = await response.json();
       if (!isValidAppData(serverData)) throw new Error("Les donnees gestion ne sont pas lisibles.");
       data = serverData;
+      adminFullDataLoadedV191 = true;
       serverSyncEnabled = true;
       initialAdminServerSyncPending = false;
       initialAdminServerSyncFailed = false;
@@ -691,6 +712,7 @@ async function syncDataFromServer() {
       codes: [],
       teams: localTeam ? [localTeam] : [],
     };
+    adminFullDataLoadedV191 = false;
 
     if (localTeam) {
       try {
@@ -713,6 +735,7 @@ async function syncDataFromServer() {
   } catch (error) {
     serverSyncEnabled = false;
     serverWasTemporarilyUnavailable = true;
+    if (isAdminRouteActive()) adminFullDataLoadedV191 = false;
     initialShopServerSyncFailed = true;
     initialAdminServerSyncFailed = true;
     renderShop();
@@ -772,7 +795,8 @@ function requestPlayerPositionRefresh(force = false) {
 function canAttemptServerSave() {
   if (!canUseBackend()) return false;
   if (shouldAllowPlayerServerSave()) return true;
-  return Boolean(isAdminRouteActive() && adminAuthenticated);
+  if (!isAdminRouteActive() || !adminAuthenticated) return false;
+  return Boolean(adminFullDataLoadedV191 && !hasSparseAdminRouteDataV191());
 }
 
 function scheduleServerSave(immediate = false) {
@@ -820,6 +844,9 @@ async function persistDataToServer() {
 
     const headers = { "Content-Type": "application/json" };
     if (isAdminRouteActive() && adminAuthenticated) {
+      if (!adminFullDataLoadedV191 || hasSparseAdminRouteDataV191()) {
+        throw new Error("Sauvegarde admin bloquee: donnees parcours incompletes.");
+      }
       headers["X-Escape-Admin-Write"] = "1";
     }
     const response = await fetch(API_DATA_URL, {

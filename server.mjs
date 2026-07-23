@@ -431,6 +431,54 @@ function adminRobustnessDuplicatesV167(values) {
   return Array.from(duplicates);
 }
 
+function adminRouteContentStatsV191(route) {
+  const puzzles = Array.isArray(route?.puzzles) ? route.puzzles : [];
+  return {
+    puzzleCount: puzzles.length,
+    titleCount: puzzles.filter((puzzle) => compactText(puzzle?.title)).length,
+    questionCount: puzzles.filter((puzzle) => compactText(puzzle?.question)).length,
+    placeCount: puzzles.filter((puzzle) => compactText(puzzle?.place)).length,
+    answerCount: puzzles.filter((puzzle) => compactText(puzzle?.answer) || (Array.isArray(puzzle?.acceptedAnswers) && puzzle.acceptedAnswers.length)).length,
+    gpsCount: puzzles.filter((puzzle) => Number.isFinite(Number(puzzle?.lat)) && Number.isFinite(Number(puzzle?.lng))).length,
+    lockedGpsCount: puzzles.filter((puzzle) => Boolean(puzzle?.requireLocation)).length,
+    hintCount: puzzles.reduce((sum, puzzle) => sum + (Array.isArray(puzzle?.hints) ? puzzle.hints.filter(Boolean).length : 0), 0),
+    imageCount: puzzles.filter((puzzle) => puzzle?.image?.dataUrl || puzzle?.image?.url).length,
+    routeStartGps: Number.isFinite(Number(route?.startLat)) && Number.isFinite(Number(route?.startLng)),
+  };
+}
+
+function adminRouteContentLossV191(previousRoute, nextRoute) {
+  if (!previousRoute || !nextRoute) return [];
+  const previous = adminRouteContentStatsV191(previousRoute);
+  const next = adminRouteContentStatsV191(nextRoute);
+  const issues = [];
+  const criticalFields = [
+    ["titleCount", "titres d'enigmes"],
+    ["questionCount", "questions"],
+    ["placeCount", "lieux"],
+    ["answerCount", "reponses"],
+    ["gpsCount", "points GPS"],
+    ["lockedGpsCount", "verrouillages GPS"],
+  ];
+  criticalFields.forEach(([field, label]) => {
+    const before = Number(previous[field]) || 0;
+    const after = Number(next[field]) || 0;
+    if (before >= 3 && after < Math.max(1, Math.floor(before * 0.5))) {
+      issues.push(`${label}: ${before} -> ${after}`);
+    }
+  });
+  if (previous.hintCount >= 6 && next.hintCount < Math.max(1, Math.floor(previous.hintCount * 0.5))) {
+    issues.push(`indices: ${previous.hintCount} -> ${next.hintCount}`);
+  }
+  if (previous.imageCount >= 3 && next.imageCount < Math.max(1, Math.floor(previous.imageCount * 0.5))) {
+    issues.push(`images d'enigmes: ${previous.imageCount} -> ${next.imageCount}`);
+  }
+  if (previous.routeStartGps && !next.routeStartGps) {
+    issues.push("point GPS de depart supprime");
+  }
+  return issues;
+}
+
 function validateAdminDataPayloadV167(previousData, nextData, request) {
   const issues = [];
   const warnings = [];
@@ -441,6 +489,8 @@ function validateAdminDataPayloadV167(previousData, nextData, request) {
   const routeIds = nextRoutes.map((route) => compactText(route?.id));
   const routeIdSet = new Set(routeIds.filter(Boolean));
   const override = compactText(request?.headers?.["x-admin-danger-confirm"]) === "routes-delete";
+  const contentOverride = compactText(request?.headers?.["x-admin-danger-confirm"]) === "route-content-loss";
+  const previousRouteById = new Map(previousRoutes.map((route) => [compactText(route?.id), route]));
 
   if (nextRoutes.length < ADMIN_ROBUSTNESS_MIN_ROUTE_COUNT_V167) {
     issues.push("Sauvegarde bloquee: " + nextRoutes.length + " parcours seulement, " + ADMIN_ROBUSTNESS_MIN_ROUTE_COUNT_V167 + " minimum attendus.");
@@ -463,6 +513,12 @@ function validateAdminDataPayloadV167(previousData, nextData, request) {
     if (!Array.isArray(route?.puzzles) || route.puzzles.length === 0) warnings.push(label + ": aucune enigme renseignee.");
     if (duplicatePuzzleIds.length) issues.push(label + ": enigmes en double (" + duplicatePuzzleIds.join(", ") + ").");
     if (puzzleIds.some((id) => !id)) issues.push(label + ": une enigme n'a pas d'identifiant.");
+    if (!contentOverride) {
+      const losses = adminRouteContentLossV191(previousRouteById.get(compactText(route?.id)), route);
+      if (losses.length) {
+        issues.push(label + ": perte massive de contenu detectee (" + losses.join(", ") + "). Sauvegarde refusee pour proteger les parcours.");
+      }
+    }
   });
 
   const codeValues = Array.isArray(nextData.codes) ? nextData.codes.map((code) => compactText(code?.code)) : [];
