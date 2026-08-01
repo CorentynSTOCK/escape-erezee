@@ -2079,6 +2079,7 @@ async function handleBriefingGeolocationPosition(position) {
     return;
   }
 
+  window.clearLocationPermissionProblemV194?.();
   const radius = getRouteStartRadius(route);
   const lat = position.coords.latitude;
   const lng = position.coords.longitude;
@@ -2109,14 +2110,16 @@ async function handleBriefingGeolocationPosition(position) {
   }
 }
 
-function handleBriefingGeolocationError() {
+function handleBriefingGeolocationError(error) {
   const team = getCurrentTeam();
   const route = team ? getRoute(team.routeId) : null;
+  const denied = Number(error?.code) === 1;
   stopBriefingGeolocationWatch();
   updateBriefingLocationUi(team, route, {
     kind: "error",
-    text: "Position non disponible. Verifiez l'autorisation GPS puis reessayez.",
+    text: window.playerLocationTextV194?.(denied ? "denied" : "temporary") || "Position non disponible. Verifiez l'autorisation GPS puis reessayez.",
   });
+  window.showLocationPermissionHelpV194?.({ error, context: "briefing", autoOpen: denied });
 }
 
 function locateBriefingStart() {
@@ -2134,6 +2137,7 @@ function locateBriefingStart() {
       kind: "error",
       text: "La geolocalisation n'est pas disponible sur cet appareil.",
     });
+    window.showLocationPermissionHelpV194?.({ context: "briefing", reason: "unsupported", autoOpen: true });
     return;
   }
 
@@ -2145,7 +2149,6 @@ function locateBriefingStart() {
     return;
   }
 
-  requestPlayerOrientationPermissionV185({ showNotice: true, briefing: true });
   stopGeolocationWatch();
   updateBriefingLocationUi(team, route, {
     kind: "active",
@@ -2974,6 +2977,7 @@ async function processPlayerGeolocationV184(position) {
     return;
   }
 
+  window.clearLocationPermissionProblemV194?.();
   const currentPosition = {
     lat: position.coords.latitude,
     lng: position.coords.longitude,
@@ -3443,8 +3447,10 @@ async function handleGeolocationPosition(position) {
   }
 }
 
-function handleGeolocationError() {
-  els.distanceNote.textContent = window.playerDynamicTextV152 ? window.playerDynamicTextV152("Position non disponible. Verifiez l\'autorisation GPS puis reessayez.") : "Position non disponible. Verifiez l\'autorisation GPS puis reessayez.";
+function handleGeolocationError(error) {
+  const denied = Number(error?.code) === 1;
+  els.distanceNote.textContent = window.playerLocationTextV194?.(denied ? "denied" : "temporary") || (window.playerDynamicTextV152 ? window.playerDynamicTextV152("Position non disponible. Verifiez l\'autorisation GPS puis reessayez.") : "Position non disponible. Verifiez l\'autorisation GPS puis reessayez.");
+  window.showLocationPermissionHelpV194?.({ error, context: "game", autoOpen: denied });
 }
 
 function locatePlayer() {
@@ -3454,17 +3460,14 @@ function locatePlayer() {
   const puzzle = getCurrentPuzzle(team, route);
   if (!puzzle.requireLocation) {
     els.distanceNote.textContent = "Cette enigme est deja accessible.";
-    requestPlayerOrientationPermissionV185({ showNotice: true });
     return;
   }
 
   if (!navigator.geolocation) {
     els.distanceNote.textContent = "La geolocalisation n'est pas disponible sur cet appareil.";
-    requestPlayerOrientationPermissionV185({ showNotice: true });
+    window.showLocationPermissionHelpV194?.({ context: "game", reason: "unsupported", autoOpen: true });
     return;
   }
-
-  requestPlayerOrientationPermissionV185({ showNotice: true });
 
   if (geolocationWatchId !== null && geolocationWatchPuzzleId === puzzle.id) {
     els.distanceNote.textContent = "Suivi GPS deja actif. La carte et la fleche se mettent a jour automatiquement.";
@@ -3472,7 +3475,7 @@ function locatePlayer() {
   }
 
   stopGeolocationWatch();
-  els.distanceNote.textContent = "Suivi GPS active. Si le telephone le demande, autorisez aussi mouvement et orientation pour que la fleche suive la boussole.";
+  els.distanceNote.textContent = window.playerLocationTextV194?.("tracking") || "Suivi GPS actif. Activez le mode guidage pour que la fleche suive l'orientation du telephone.";
   geolocationWatchPuzzleId = puzzle.id;
   geolocationWatchId = navigator.geolocation.watchPosition(
     handleGeolocationPosition,
@@ -6981,6 +6984,288 @@ escapeI18nInstall();
   window.setTimeout(() => {
     if (typeof escapeI18nApplyDom === 'function') escapeI18nApplyDom();
   }, 0);
+})();
+
+
+/* player-location-permission-help-v194 */
+(function initPlayerLocationPermissionHelpV194() {
+  if (window.__playerLocationPermissionHelpV194) return;
+  window.__playerLocationPermissionHelpV194 = true;
+
+  let activeProblem = null;
+  let dialog = null;
+
+  function language() {
+    return typeof playerLangV151 === "function" ? playerLangV151() : "fr";
+  }
+
+  function platform() {
+    const userAgent = navigator.userAgent || "";
+    const isIpadOs = navigator.platform === "MacIntel" && Number(navigator.maxTouchPoints) > 1;
+    if (/iphone|ipad|ipod/i.test(userAgent) || isIpadOs) return "ios";
+    if (/android/i.test(userAgent)) return "android";
+    return "other";
+  }
+
+  function copy() {
+    const labels = {
+      fr: {
+        help: "La localisation ne fonctionne pas ?",
+        denied: "La localisation est bloqu\u00e9e pour ce site. Autorisez-la dans les r\u00e9glages, puis r\u00e9essayez.",
+        temporary: "Position introuvable pour le moment. V\u00e9rifiez le GPS et votre connexion, puis r\u00e9essayez.",
+        tracking: "Suivi GPS actif. Activez le mode guidage pour que la fl\u00e8che suive l'orientation du t\u00e9l\u00e9phone.",
+        title: "Autoriser la localisation",
+        deniedIntro: "Le t\u00e9l\u00e9phone bloque actuellement l'acc\u00e8s \u00e0 votre position. Suivez ces \u00e9tapes, puis revenez ici.",
+        temporaryIntro: "Si la position reste indisponible, v\u00e9rifiez les autorisations du navigateur avec ces \u00e9tapes.",
+        retry: "R\u00e9essayer ma position",
+        close: "Fermer",
+        backGranted: "Autorisation d\u00e9tect\u00e9e. Appuyez sur R\u00e9essayer ma position.",
+        iosTitle: "Sur iPhone ou iPad",
+        iosSteps: [
+          "Dans Safari, touchez le bouton de menu de la page pr\u00e8s de l'adresse.",
+          "Ouvrez R\u00e9glages du site web, puis Localisation et choisissez Autoriser.",
+          "Si Safari est r\u00e9gl\u00e9 sur Jamais : R\u00e9glages de l'iPhone > Confidentialit\u00e9 et s\u00e9curit\u00e9 > Service de localisation > Sites web Safari. Choisissez Lorsque l'app est active et activez Position exacte.",
+        ],
+        androidTitle: "Sur Android",
+        androidSteps: [
+          "Dans Chrome, touchez l'ic\u00f4ne \u00e0 gauche de l'adresse, puis Autorisations.",
+          "Ouvrez Localisation et choisissez Autoriser.",
+          "Si cela reste bloqu\u00e9 : R\u00e9glages Android > Applications > Chrome (ou votre navigateur) > Autorisations > Localisation. Autorisez pendant l'utilisation et activez la position pr\u00e9cise.",
+        ],
+        otherTitle: "Dans votre navigateur",
+        otherSteps: [
+          "Ouvrez les informations ou les reglages du site depuis la barre d'adresse.",
+          "Autorisez la localisation pour escape-erezee.be.",
+          "V\u00e9rifiez aussi que la localisation du t\u00e9l\u00e9phone est activ\u00e9e, puis revenez sur cette page.",
+        ],
+      },
+      en: {
+        help: "Location not working?",
+        denied: "Location is blocked for this website. Allow it in Settings, then try again.",
+        temporary: "Your position is temporarily unavailable. Check GPS and your connection, then try again.",
+        tracking: "GPS tracking is active. Turn on guidance mode so the arrow follows your phone's direction.",
+        title: "Allow location access",
+        deniedIntro: "Your phone is currently blocking access to your location. Follow these steps, then return here.",
+        temporaryIntro: "If your position remains unavailable, check your browser permissions with these steps.",
+        retry: "Try my location again",
+        close: "Close",
+        backGranted: "Permission detected. Tap Try my location again.",
+        iosTitle: "On iPhone or iPad",
+        iosSteps: [
+          "In Safari, tap the Page Menu button next to the address.",
+          "Open Website Settings, then Location, and choose Allow.",
+          "If Safari is set to Never: iPhone Settings > Privacy & Security > Location Services > Safari Websites. Choose While Using the App and turn on Precise Location.",
+        ],
+        androidTitle: "On Android",
+        androidSteps: [
+          "In Chrome, tap the icon to the left of the address, then Permissions.",
+          "Open Location and choose Allow.",
+          "If it is still blocked: Android Settings > Apps > Chrome (or your browser) > Permissions > Location. Allow while using and turn on precise location.",
+        ],
+        otherTitle: "In your browser",
+        otherSteps: [
+          "Open the site information or settings from the address bar.",
+          "Allow location access for escape-erezee.be.",
+          "Also make sure phone location is turned on, then return to this page.",
+        ],
+      },
+      nl: {
+        help: "Werkt de locatie niet?",
+        denied: "Locatie is geblokkeerd voor deze website. Sta dit toe in Instellingen en probeer opnieuw.",
+        temporary: "Je positie is tijdelijk niet beschikbaar. Controleer gps en je verbinding en probeer opnieuw.",
+        tracking: "Gps-tracking is actief. Schakel de begeleidingsmodus in zodat de pijl de richting van je telefoon volgt.",
+        title: "Locatie toestaan",
+        deniedIntro: "Je telefoon blokkeert momenteel de toegang tot je locatie. Volg deze stappen en kom daarna hier terug.",
+        temporaryIntro: "Als je positie niet beschikbaar blijft, controleer dan de browsermachtigingen met deze stappen.",
+        retry: "Mijn locatie opnieuw proberen",
+        close: "Sluiten",
+        backGranted: "Toestemming gedetecteerd. Tik op Mijn locatie opnieuw proberen.",
+        iosTitle: "Op iPhone of iPad",
+        iosSteps: [
+          "Tik in Safari op de paginamenuknop naast het adres.",
+          "Open Website-instellingen, daarna Locatie, en kies Sta toe.",
+          "Staat Safari op Nooit: iPhone-instellingen > Privacy en beveiliging > Locatievoorzieningen > Safari-websites. Kies Bij gebruik van app en zet Exacte locatie aan.",
+        ],
+        androidTitle: "Op Android",
+        androidSteps: [
+          "Tik in Chrome op het pictogram links van het adres en daarna op Machtigingen.",
+          "Open Locatie en kies Toestaan.",
+          "Blijft het geblokkeerd: Android-instellingen > Apps > Chrome (of je browser) > Machtigingen > Locatie. Sta toe tijdens gebruik en zet nauwkeurige locatie aan.",
+        ],
+        otherTitle: "In je browser",
+        otherSteps: [
+          "Open de site-informatie of instellingen via de adresbalk.",
+          "Sta locatie toe voor escape-erezee.be.",
+          "Controleer ook of de locatie van je telefoon aanstaat en ga terug naar deze pagina.",
+        ],
+      },
+    };
+    return labels[language()] || labels.fr;
+  }
+
+  window.playerLocationTextV194 = function playerLocationTextV194(key) {
+    return copy()[key] || "";
+  };
+
+  function ensureHelpButtons() {
+    const briefingLocate = document.querySelector("#briefing-locate-button");
+    let briefingHelp = document.querySelector("#briefing-location-help-v194");
+    if (briefingLocate && !briefingHelp) {
+      briefingHelp = document.createElement("button");
+      briefingHelp.id = "briefing-location-help-v194";
+      briefingHelp.className = "location-help-button-v194";
+      briefingHelp.type = "button";
+      briefingHelp.addEventListener("click", function () {
+        openDialog({ context: "briefing", reason: activeProblem?.reason || "help" });
+      });
+      briefingLocate.insertAdjacentElement("afterend", briefingHelp);
+    }
+
+    const mapActions = document.querySelector(".map-panel .map-actions");
+    let gameHelp = document.querySelector("#game-location-help-v194");
+    if (mapActions && !gameHelp) {
+      gameHelp = document.createElement("button");
+      gameHelp.id = "game-location-help-v194";
+      gameHelp.className = "location-help-button-v194";
+      gameHelp.type = "button";
+      gameHelp.hidden = true;
+      gameHelp.addEventListener("click", function () {
+        openDialog({ context: "game", reason: activeProblem?.reason || "help" });
+      });
+      mapActions.insertAdjacentElement("afterend", gameHelp);
+    }
+
+    const labels = copy();
+    if (briefingHelp) briefingHelp.textContent = labels.help;
+    if (gameHelp) gameHelp.textContent = labels.help;
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    if (briefingHelp) briefingHelp.hidden = team?.status !== "briefing";
+    if (gameHelp) gameHelp.hidden = team?.status !== "playing" || !activeProblem;
+  }
+
+  function ensureDialog() {
+    if (dialog) return dialog;
+    dialog = document.createElement("div");
+    dialog.id = "player-location-dialog-v194";
+    dialog.className = "location-dialog-v194";
+    dialog.hidden = true;
+    dialog.innerHTML = [
+      '<div class="location-dialog-backdrop-v194" data-location-close-v194></div>',
+      '<section class="location-dialog-panel-v194" role="dialog" aria-modal="true" aria-labelledby="location-dialog-title-v194">',
+        '<button class="location-dialog-close-v194" type="button" data-location-close-v194 aria-label="Fermer">&times;</button>',
+        '<p class="section-label" id="location-platform-v194"></p>',
+        '<h2 id="location-dialog-title-v194"></h2>',
+        '<p id="location-dialog-intro-v194"></p>',
+        '<ol id="location-dialog-steps-v194"></ol>',
+        '<p class="location-dialog-state-v194" id="location-dialog-state-v194" role="status" aria-live="polite"></p>',
+        '<div class="location-dialog-actions-v194">',
+          '<button class="primary-button" type="button" id="location-retry-v194"></button>',
+          '<button class="secondary-button" type="button" data-location-close-v194></button>',
+        '</div>',
+      '</section>',
+    ].join("");
+    document.body.appendChild(dialog);
+    dialog.addEventListener("click", function (event) {
+      if (event.target.closest("[data-location-close-v194]")) closeDialog();
+    });
+    dialog.querySelector("#location-retry-v194")?.addEventListener("click", retryLocation);
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !dialog.hidden) closeDialog();
+    });
+    return dialog;
+  }
+
+  function fillDialog(reason) {
+    const labels = copy();
+    const activePlatform = platform();
+    const title = labels[activePlatform + "Title"] || labels.otherTitle;
+    const steps = labels[activePlatform + "Steps"] || labels.otherSteps;
+    const root = ensureDialog();
+    root.querySelector("#location-platform-v194").textContent = title;
+    root.querySelector("#location-dialog-title-v194").textContent = labels.title;
+    root.querySelector("#location-dialog-intro-v194").textContent = reason === "denied" ? labels.deniedIntro : labels.temporaryIntro;
+    root.querySelector("#location-dialog-steps-v194").replaceChildren(...steps.map(function (step) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      return item;
+    }));
+    root.querySelector("#location-dialog-state-v194").textContent = "";
+    root.querySelector("#location-retry-v194").textContent = labels.retry;
+    const closeButtons = root.querySelectorAll("[data-location-close-v194]");
+    closeButtons.forEach(function (button) {
+      if (button.tagName === "BUTTON") {
+        button.setAttribute("aria-label", labels.close);
+        if (!button.classList.contains("location-dialog-close-v194")) button.textContent = labels.close;
+      }
+    });
+  }
+
+  function openDialog(problem = {}) {
+    activeProblem = { ...activeProblem, ...problem, reason: problem.reason || activeProblem?.reason || "help" };
+    fillDialog(activeProblem.reason);
+    ensureDialog().hidden = false;
+    document.body.classList.add("location-permission-open-v194");
+    window.setTimeout(function () {
+      dialog.querySelector("#location-retry-v194")?.focus();
+    }, 0);
+  }
+
+  function closeDialog() {
+    if (!dialog) return;
+    dialog.hidden = true;
+    document.body.classList.remove("location-permission-open-v194");
+  }
+
+  function retryLocation() {
+    const context = activeProblem?.context || (getCurrentTeam()?.status === "briefing" ? "briefing" : "game");
+    closeDialog();
+    if (context === "briefing") locateBriefingStart();
+    else locatePlayer();
+  }
+
+  window.showLocationPermissionHelpV194 = function showLocationPermissionHelpV194(problem = {}) {
+    const denied = Number(problem.error?.code) === 1;
+    activeProblem = {
+      context: problem.context || "game",
+      reason: denied ? "denied" : (problem.reason || "temporary"),
+      at: Date.now(),
+    };
+    ensureHelpButtons();
+    if (problem.autoOpen) openDialog(activeProblem);
+  };
+
+  window.clearLocationPermissionProblemV194 = function clearLocationPermissionProblemV194() {
+    activeProblem = null;
+    const gameHelp = document.querySelector("#game-location-help-v194");
+    if (gameHelp) gameHelp.hidden = true;
+    if (dialog && !dialog.hidden) closeDialog();
+  };
+
+  async function checkPermissionAfterSettings() {
+    if (!activeProblem || document.visibilityState !== "visible" || !navigator.permissions?.query) return;
+    try {
+      const permission = await navigator.permissions.query({ name: "geolocation" });
+      if (permission.state !== "granted") return;
+      const status = dialog?.querySelector("#location-dialog-state-v194");
+      if (status) status.textContent = copy().backGranted;
+    } catch {
+      // Safari does not consistently expose geolocation through Permissions API.
+    }
+  }
+
+  if (typeof renderPlayer === "function" && !renderPlayer.__locationHelpV194) {
+    const previousRenderPlayerV194 = renderPlayer;
+    renderPlayer = function renderPlayerLocationHelpV194() {
+      const result = previousRenderPlayerV194.apply(this, arguments);
+      window.setTimeout(ensureHelpButtons, 0);
+      return result;
+    };
+    renderPlayer.__locationHelpV194 = true;
+  }
+
+  document.addEventListener("visibilitychange", checkPermissionAfterSettings);
+  window.addEventListener("hashchange", function () { window.setTimeout(ensureHelpButtons, 0); });
+  window.setTimeout(ensureHelpButtons, 0);
 })();
 
 /* multilingual-v119 */
