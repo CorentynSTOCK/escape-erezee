@@ -2039,7 +2039,7 @@ function updateBriefingLocationUi(team, route, forcedMessage = null) {
   }
 
   if (!state.position) {
-    setBriefingLocationMessage("blocked", "Localisez votre equipe au point de depart avant de commencer l&#039;aventure.");
+    setBriefingLocationMessage("blocked", "Localisez votre equipe au point de depart avant de commencer l'aventure.");
     return;
   }
 
@@ -3523,8 +3523,10 @@ async function handleActivation(event) {
     persistSafeClientStateV189();
     els.activationForm.reset();
     els.activationMessage.textContent = "";
-    showToast("Briefing ouvert.");
     render();
+    window.setTimeout(() => {
+      document.querySelector("#briefing-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   } catch (error) {
     els.activationMessage.textContent = error.message || "Activation impossible.";
   } finally {
@@ -3557,7 +3559,9 @@ function startAdventure() {
   touchTeam(team);
   saveData({ immediate: true });
   renderPlayer();
-  showToast("Aventure lanc\u00e9e.");
+  window.setTimeout(() => {
+    document.querySelector("#player-game-guide-v192")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 100);
   locatePlayer();
   requestPlayerPositionRefresh(true);
 }
@@ -5460,10 +5464,14 @@ function playerRescueRender() {
 
   const team = getCurrentTeam();
   const route = team ? getRoute(team.routeId) : null;
-  refs.panel.classList.toggle("is-hidden", !team);
-  if (!team) return;
+  if (!team) {
+    refs.panel.classList.add("is-hidden");
+    return;
+  }
 
   const status = playerRescueStatus(team, route);
+  const requiresAttention = team.status === "playing" && status.tone !== "is-ok";
+  refs.panel.classList.toggle("is-hidden", !requiresAttention);
   refs.panel.classList.remove("is-ok", "is-warn", "is-danger");
   refs.panel.classList.add(status.tone);
   refs.title.textContent = status.title;
@@ -9578,7 +9586,7 @@ if (typeof renderFinishPanel === "function" && !window.__reviewRoutineFinishWrap
       input.dataset.uxBoundV173 = "1";
       input.setAttribute("spellcheck", "false");
       input.addEventListener("input", function () {
-        const clean = input.value.toUpperCase().replace(/s+/g, "-").replace(/[^A-Z0-9-]/g, "");
+        const clean = input.value.toUpperCase().replace(/\s+/g, "-").replace(/[^A-Z0-9-]/g, "").replace(/-+/g, "-");
         if (input.value !== clean) input.value = clean;
       });
     }
@@ -9879,3 +9887,318 @@ window.__stripeMultiTeamCodesV178 = true;
 
 /* stripe-team-count-v180 */
 window.__stripeTeamCountV180 = true;
+
+
+/* player-first-steps-v192 */
+(function initPlayerFirstStepsV192() {
+  if (window.__playerFirstStepsV192) return;
+  window.__playerFirstStepsV192 = true;
+
+  let helpRequested = false;
+  let firstGuideDismissed = false;
+  let activeTeamId = "";
+
+  function language() {
+    return typeof playerLangV151 === "function" ? playerLangV151() : "fr";
+  }
+
+  function labels() {
+    const values = {
+      fr: {
+        code: "Code",
+        briefing: "Départ",
+        puzzles: "Énigmes",
+        finish: "Résultat",
+        briefingKicker: "Avant de lancer le chrono",
+        briefingTitle: "Trois actions, dans cet ordre",
+        briefingSteps: [
+          "Rejoignez le point de départ indiqué sur la carte.",
+          "Appuyez sur « Vérifier ma position » et acceptez les autorisations demandées.",
+          "Quand la position est validée en vert, lancez l'aventure.",
+        ],
+        locate: "1. Vérifier ma position",
+        refresh: "1. Actualiser ma position",
+        start: "2. Commencer l'aventure",
+        startHint: "Le bouton de départ s'active seulement lorsque votre équipe est dans la zone.",
+        help: "Comment jouer ?",
+        gameKicker: "Première étape",
+        gameTitle: "Laissez l'application vous guider",
+        gameSteps: [
+          "Activez le mode guidage ci-dessous.",
+          "Marchez vers le point jaune en restant sur les chemins autorisés.",
+          "Dans la zone, l'énigme se déverrouille automatiquement : observez les lieux et répondez.",
+        ],
+        guide: "Me guider vers l'étape",
+        read: "Voir l'énigme",
+        hide: "J'ai compris",
+        nextBriefing: "Rejoignez le départ, puis vérifiez votre position GPS.",
+        nextLocked: "Activez le guidage et rejoignez le point jaune.",
+        nextUnlocked: "Lisez l'énigme, observez autour de vous et validez votre réponse.",
+      },
+      en: {
+        code: "Code",
+        briefing: "Start",
+        puzzles: "Puzzles",
+        finish: "Result",
+        briefingKicker: "Before starting the timer",
+        briefingTitle: "Three actions, in this order",
+        briefingSteps: [
+          "Go to the starting point shown on the map.",
+          "Tap “Check my position” and allow the requested permissions.",
+          "When your position turns green, start the adventure.",
+        ],
+        locate: "1. Check my position",
+        refresh: "1. Refresh my position",
+        start: "2. Start the adventure",
+        startHint: "The start button is enabled only when your team is inside the starting area.",
+        help: "How to play",
+        gameKicker: "First step",
+        gameTitle: "Let the app guide you",
+        gameSteps: [
+          "Turn on guidance mode below.",
+          "Walk towards the yellow point and stay on authorised paths.",
+          "Inside the area, the puzzle unlocks automatically: observe your surroundings and answer.",
+        ],
+        guide: "Guide me to the step",
+        read: "View the puzzle",
+        hide: "Got it",
+        nextBriefing: "Reach the start, then check your GPS position.",
+        nextLocked: "Turn on guidance and reach the yellow point.",
+        nextUnlocked: "Read the puzzle, look around you and submit your answer.",
+      },
+      nl: {
+        code: "Code",
+        briefing: "Start",
+        puzzles: "Raadsels",
+        finish: "Resultaat",
+        briefingKicker: "Voor de timer start",
+        briefingTitle: "Drie acties, in deze volgorde",
+        briefingSteps: [
+          "Ga naar het startpunt dat op de kaart staat.",
+          "Tik op ‘Mijn positie controleren’ en sta de gevraagde machtigingen toe.",
+          "Wanneer je positie groen wordt, start je het avontuur.",
+        ],
+        locate: "1. Mijn positie controleren",
+        refresh: "1. Mijn positie vernieuwen",
+        start: "2. Het avontuur starten",
+        startHint: "De startknop wordt pas actief wanneer je team in de startzone is.",
+        help: "Hoe speel je?",
+        gameKicker: "Eerste stap",
+        gameTitle: "Laat de app je begeleiden",
+        gameSteps: [
+          "Schakel hieronder de begeleidingsmodus in.",
+          "Loop naar de gele stip en blijf op de toegestane paden.",
+          "In de zone wordt het raadsel automatisch ontgrendeld: kijk om je heen en antwoord.",
+        ],
+        guide: "Begeleid mij naar de stap",
+        read: "Bekijk het raadsel",
+        hide: "Begrepen",
+        nextBriefing: "Ga naar de start en controleer daarna je gps-positie.",
+        nextLocked: "Schakel de begeleiding in en bereik de gele stip.",
+        nextUnlocked: "Lees het raadsel, kijk om je heen en verstuur je antwoord.",
+      },
+    };
+    return values[language()] || values.fr;
+  }
+
+  function currentContext() {
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    const route = team && typeof getRoute === "function" ? getRoute(team.routeId) : null;
+    const puzzle = team && route && typeof getCurrentPuzzle === "function" ? getCurrentPuzzle(team, route) : null;
+    const progress = team && route && typeof getTeamProgress === "function"
+      ? getTeamProgress(team, route)
+      : { solved: 0, total: route?.puzzles?.length || 0 };
+    return { team, route, puzzle, progress };
+  }
+
+  function numberedSteps(items) {
+    return '<ol>' + items.map(function (item, index) {
+      return '<li><b>' + (index + 1) + '</b><span>' + escapeHtml(item) + '</span></li>';
+    }).join("") + '</ol>';
+  }
+
+  function ensureBriefingGuide(copy) {
+    const briefing = document.querySelector("#briefing-panel");
+    if (!briefing) return;
+    let guide = briefing.querySelector("#player-briefing-guide-v192");
+    if (!guide) {
+      guide = document.createElement("section");
+      guide.id = "player-briefing-guide-v192";
+      guide.className = "player-first-steps-v192 player-briefing-guide-v192";
+      const briefingText = briefing.querySelector("#briefing-text");
+      briefingText?.insertAdjacentElement("afterend", guide);
+    }
+    guide.innerHTML = '<p>' + escapeHtml(copy.briefingKicker) + '</p><h3>' + escapeHtml(copy.briefingTitle) + '</h3>' + numberedSteps(copy.briefingSteps);
+  }
+
+  function ensureBriefingHint(copy) {
+    const startButton = document.querySelector("#start-adventure-button");
+    if (!startButton) return;
+    let hint = document.querySelector("#player-start-hint-v192");
+    if (!hint) {
+      hint = document.createElement("p");
+      hint.id = "player-start-hint-v192";
+      hint.className = "player-start-hint-v192";
+      startButton.insertAdjacentElement("beforebegin", hint);
+    }
+    hint.textContent = copy.startHint;
+  }
+
+  function ensureHelpButton(copy, context) {
+    const stepper = document.querySelector("#ux-player-stepper-v173");
+    if (!stepper) return;
+    let button = document.querySelector("#player-help-button-v192");
+    if (!button) {
+      button = document.createElement("button");
+      button.id = "player-help-button-v192";
+      button.className = "player-help-button-v192";
+      button.type = "button";
+      button.addEventListener("click", function () {
+        helpRequested = true;
+        update();
+        document.querySelector("#player-game-guide-v192")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      stepper.insertAdjacentElement("afterend", button);
+    }
+    button.textContent = copy.help;
+    button.hidden = context.team?.status !== "playing";
+  }
+
+  function ensureGameGuide(copy, context) {
+    const mapPanel = document.querySelector("#player-map")?.closest(".map-panel");
+    if (!mapPanel) return;
+    let guide = document.querySelector("#player-game-guide-v192");
+    if (!guide) {
+      guide = document.createElement("section");
+      guide.id = "player-game-guide-v192";
+      guide.className = "player-first-steps-v192 player-game-guide-v192";
+      mapPanel.insertAdjacentElement("beforebegin", guide);
+      guide.addEventListener("click", function (event) {
+        const action = event.target.closest("[data-player-guide-action-v192]");
+        if (!action) return;
+        if (action.dataset.playerGuideActionV192 === "guide") {
+          enterPlayerNavigationV183();
+        } else if (action.dataset.playerGuideActionV192 === "read") {
+          document.querySelector("#riddle-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          helpRequested = false;
+          firstGuideDismissed = true;
+          guide.classList.add("is-hidden");
+        }
+      });
+    }
+
+    const isPlaying = context.team?.status === "playing";
+    const isFirstPuzzle = isPlaying && Number(context.progress?.solved || 0) === 0;
+    const shouldShow = isPlaying && (helpRequested || (isFirstPuzzle && !firstGuideDismissed));
+    guide.classList.toggle("is-hidden", !shouldShow);
+    if (!isPlaying) return;
+
+    const unlocked = context.puzzle && (!context.puzzle.requireLocation || context.team?.unlockedPuzzleIds?.includes(context.puzzle.id));
+    const action = unlocked ? "read" : "guide";
+    const actionLabel = unlocked ? copy.read : copy.guide;
+    guide.innerHTML = [
+      '<p>' + escapeHtml(copy.gameKicker) + '</p>',
+      '<h3>' + escapeHtml(copy.gameTitle) + '</h3>',
+      numberedSteps(copy.gameSteps),
+      '<div class="player-first-steps-actions-v192">',
+        '<button class="primary-button" type="button" data-player-guide-action-v192="' + action + '">' + escapeHtml(actionLabel) + '</button>',
+        '<button class="secondary-button" type="button" data-player-guide-action-v192="hide">' + escapeHtml(copy.hide) + '</button>',
+      '</div>',
+    ].join("");
+  }
+
+  function updateStepper(copy, context) {
+    const stepper = document.querySelector("#ux-player-stepper-v173");
+    if (!stepper) return;
+    const order = ["code", "briefing", "puzzles", "finish"];
+    const active = !context.team
+      ? "code"
+      : context.team.status === "briefing"
+        ? "briefing"
+        : context.team.status === "won" || context.team.status === "lost"
+          ? "finish"
+          : "puzzles";
+    const names = { code: copy.code, briefing: copy.briefing, puzzles: copy.puzzles, finish: copy.finish };
+    stepper.querySelectorAll("[data-ux-step-v173]").forEach(function (node) {
+      const key = node.dataset.uxStepV173;
+      node.textContent = names[key] || key;
+      node.classList.toggle("is-active", key === active);
+      node.classList.toggle("is-done", order.indexOf(key) < order.indexOf(active));
+    });
+  }
+
+  function updateNextAction(copy, context) {
+    const action = document.querySelector("#ux-next-action-v173");
+    const strong = action?.querySelector("strong");
+    if (!action || !strong || !context.team) return;
+    action.classList.toggle("is-hidden-v192", context.team.status === "briefing");
+    if (context.team.status === "briefing") {
+      action.dataset.tone = "gps";
+      strong.textContent = copy.nextBriefing;
+      return;
+    }
+    if (context.team.status !== "playing" || !context.puzzle) return;
+    const unlocked = !context.puzzle.requireLocation || context.team.unlockedPuzzleIds?.includes(context.puzzle.id);
+    action.dataset.tone = unlocked ? "answer" : "gps";
+    strong.textContent = unlocked ? copy.nextUnlocked : copy.nextLocked;
+  }
+
+  function update() {
+    if (location.hash !== "#player") return;
+    const copy = labels();
+    const context = currentContext();
+    if ((context.team?.id || "") !== activeTeamId) {
+      activeTeamId = context.team?.id || "";
+      helpRequested = false;
+      firstGuideDismissed = false;
+    }
+    const input = document.querySelector("#activation-code");
+    if (input) {
+      input.autocapitalize = "characters";
+      input.enterKeyHint = "go";
+    }
+    ensureBriefingGuide(copy);
+    ensureBriefingHint(copy);
+    ensureHelpButton(copy, context);
+    ensureGameGuide(copy, context);
+    updateStepper(copy, context);
+    updateNextAction(copy, context);
+
+    if (context.team?.status === "briefing") {
+      document.querySelector("#start-point-card")?.classList.add("is-hidden");
+    }
+
+    const locateButton = document.querySelector("#briefing-locate-button");
+    const startButton = document.querySelector("#start-adventure-button");
+    if (locateButton && context.team?.status === "briefing") {
+      locateButton.textContent = context.team?.briefingStartLocation ? copy.refresh : copy.locate;
+    }
+    if (startButton) startButton.textContent = copy.start;
+  }
+
+  if (typeof renderPlayer === "function" && !renderPlayer.__firstStepsV192) {
+    const previousRenderPlayerV192 = renderPlayer;
+    renderPlayer = function renderPlayerFirstStepsV192() {
+      const result = previousRenderPlayerV192.apply(this, arguments);
+      update();
+      window.setTimeout(update, 0);
+      return result;
+    };
+    renderPlayer.__firstStepsV192 = true;
+  }
+
+  if (typeof updateBriefingLocationUi === "function" && !updateBriefingLocationUi.__firstStepsV192) {
+    const previousBriefingLocationUiV192 = updateBriefingLocationUi;
+    updateBriefingLocationUi = function updateBriefingLocationUiFirstStepsV192() {
+      const result = previousBriefingLocationUiV192.apply(this, arguments);
+      window.setTimeout(update, 0);
+      return result;
+    };
+    updateBriefingLocationUi.__firstStepsV192 = true;
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { window.setTimeout(update, 300); });
+  window.addEventListener("hashchange", function () { window.setTimeout(update, 100); });
+  window.setTimeout(update, 300);
+})();
