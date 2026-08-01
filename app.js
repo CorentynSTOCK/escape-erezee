@@ -3494,7 +3494,12 @@ function distanceInMeters(lat1, lng1, lat2, lng2) {
 
 async function handleActivation(event) {
   event.preventDefault();
-  const codeValue = els.activationCode.value.trim().toUpperCase();
+  const codeValue = els.activationCode.value
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^A-Z0-9-]/g, "")
+    .replace(/-+/g, "-");
   if (!codeValue) {
     els.activationMessage.textContent = "Entrez votre code d'activation.";
     return;
@@ -10157,6 +10162,17 @@ window.__stripeTeamCountV180 = true;
     if (input) {
       input.autocapitalize = "characters";
       input.enterKeyHint = "go";
+      if (!input.dataset.firstStepsBoundV192) {
+        input.dataset.firstStepsBoundV192 = "1";
+        input.addEventListener("input", function () {
+          const normalized = input.value
+            .toUpperCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^A-Z0-9-]/g, "")
+            .replace(/-+/g, "-");
+          if (input.value !== normalized) input.value = normalized;
+        });
+      }
     }
     ensureBriefingGuide(copy);
     ensureBriefingHint(copy);
@@ -10200,5 +10216,6 @@ window.__stripeTeamCountV180 = true;
 
   document.addEventListener("DOMContentLoaded", function () { window.setTimeout(update, 300); });
   window.addEventListener("hashchange", function () { window.setTimeout(update, 100); });
+  update();
   window.setTimeout(update, 300);
 })();
