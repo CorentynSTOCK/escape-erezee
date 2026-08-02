@@ -4656,6 +4656,8 @@ function renderTeamLiveMap() {
 
 
 const TEAM_AUTO_DELETE_MS = 10800000;
+const TEAM_STALE_BRIEFING_DELETE_MS_V196 = 60 * 60 * 1000;
+const ADMIN_TEAM_CLEANUP_URL_V196 = "/api/admin/team-cleanup";
 
 function getTeamStartedAt(team) {
   return Number(team?.startAt || team?.createdAt || 0);
@@ -4665,6 +4667,14 @@ function getTeamDeleteAvailability(team) {
   if (!team) return { available: false, label: "" };
   if (team.status === "won" || team.status === "lost") {
     return { available: true, label: "Partie terminée" };
+  }
+  if (team.status === "briefing") {
+    const lastActivityAt = getTeamLastSyncAt(team);
+    if (!lastActivityAt) return { available: true, label: "Briefing sans activité" };
+    const remainingMs = TEAM_STALE_BRIEFING_DELETE_MS_V196 - (Date.now() - lastActivityAt);
+    if (remainingMs <= 0) return { available: true, label: "Briefing inactif depuis plus de 1h" };
+    const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+    return { available: false, label: "Briefing · suppression dans " + remainingMinutes + " min" };
   }
   const startedAt = getTeamStartedAt(team);
   if (!startedAt) return { available: false, label: "En cours" };
@@ -4676,31 +4686,54 @@ function getTeamDeleteAvailability(team) {
   return { available: false, label: "Suppression dans " + remainingMinutes + " min" };
 }
 
-function deleteTeamFromProgress(teamId) {
+async function deleteTeamFromProgress(teamId) {
   const team = data.teams.find((item) => item.id === teamId);
   if (!team) return;
   const availability = getTeamDeleteAvailability(team);
   if (!availability.available) {
-    showToast("Suppression disponible après 3h ou une fois la partie terminée.");
+    showToast(team.status === "briefing" ? "Suppression disponible après 1h sans activité sur le briefing." : "Suppression disponible après 3h ou une fois la partie terminée.");
     return;
   }
-  if (!window.confirm("Supprimer " + team.name + " de la progression ?")) return;
+  const confirmation = team.status === "briefing"
+    ? "Supprimer " + team.name + " du briefing ?\n\nLe code restera visible dans la gestion, mais cette ancienne session ne pourra plus recréer l'équipe."
+    : "Supprimer " + team.name + " de la progression ?\n\nLe code restera visible dans la gestion, mais cette ancienne session ne pourra plus se reconnecter.";
+  if (!window.confirm(confirmation)) return;
 
-  rememberPendingAdminDelete("team", teamId);
-  data.teams = data.teams.filter((item) => item.id !== teamId);
-  const code = data.codes.find((item) => item.teamId === teamId || item.code === team.code);
-  if (code) {
-    code.teamId = null;
-    code.status = "used";
-    code.teamDeletedAt = Date.now();
+  const button = document.querySelector('[data-delete-team="' + CSS.escape(teamId) + '"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Suppression...";
   }
-  if (localStorage.getItem(SESSION_KEY) === teamId) {
-    localStorage.removeItem(SESSION_KEY);
+  try {
+    const response = await fetch(ADMIN_TEAM_CLEANUP_URL_V196, {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ action: "delete-stale-team", teamId }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || "Suppression refusee par le serveur.");
+
+    rememberPendingAdminDelete("team", teamId);
+    data.teams = data.teams.filter((item) => item.id !== teamId);
+    const code = data.codes.find((item) => item.teamId === teamId || item.code === team.code);
+    if (code) {
+      code.teamId = null;
+      code.status = "used";
+      code.teamDeletedAt = Number(payload.deletedAt) || Date.now();
+    }
+    if (localStorage.getItem(SESSION_KEY) === teamId) {
+      localStorage.removeItem(SESSION_KEY);
+    }
+    serverSyncEnabled = true;
+    renderAdmin();
+    renderPlayer();
+    showToast(team.status === "briefing" ? "Briefing supprimé. Le code a été conservé." : "Équipe supprimée de la progression. Le code a été conservé.");
+  } catch (error) {
+    showToast(error.message || "Suppression de l'équipe impossible.");
+    renderAdmin();
   }
-  saveData({ immediate: true });
-  renderAdmin();
-  renderPlayer();
-  showToast("Équipe supprimée de la progression.");
 }
 
 
@@ -4859,7 +4892,7 @@ function renderTeamTable() {
           const progress = getTeamProgress(team, route);
           const syncHealth = getTeamSyncHealth(team, route);
           const statusClass = team.status === "won" ? "is-success" : team.status === "lost" ? "is-danger" : "";
-          const statusText = team.status === "won" ? "Gagné" : team.status === "lost" ? "Perdu" : "En cours";
+          const statusText = team.status === "won" ? "Gagné" : team.status === "lost" ? "Perdu" : team.status === "briefing" ? "Briefing" : "En cours";
           const deleteInfo = getTeamDeleteAvailability(team);
           const action = deleteInfo.available
             ? '<button class="danger-button compact-button" type="button" data-delete-team="' + escapeHtml(team.id) + '">Supprimer</button>'

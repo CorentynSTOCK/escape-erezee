@@ -3615,6 +3615,83 @@ async function handlePlayerTeamSyncV187(request, response) {
 }
 
 
+/* admin-stale-briefing-cleanup-v196 */
+const ADMIN_STALE_BRIEFING_DELETE_MS_V196 = 60 * 60 * 1000;
+const ADMIN_ACTIVE_TEAM_DELETE_MS_V196 = 3 * 60 * 60 * 1000;
+
+function adminTeamActivityAtV196(team) {
+  return Math.max(
+    Number(team?.updatedAt) || 0,
+    Number(team?.lastPosition?.at) || 0,
+    Number(team?.briefingStartLocation?.at) || 0,
+    Number(team?.finishedAt) || 0,
+    Number(team?.startAt) || 0,
+    Number(team?.createdAt) || 0,
+  );
+}
+
+function adminTeamDeleteAllowedV196(team, now = Date.now()) {
+  if (!team) return false;
+  if (team.status === "won" || team.status === "lost") return true;
+  if (team.status === "briefing") {
+    const activityAt = adminTeamActivityAtV196(team);
+    return !activityAt || now - activityAt >= ADMIN_STALE_BRIEFING_DELETE_MS_V196;
+  }
+  const startedAt = Number(team.startAt || team.createdAt || 0);
+  return Boolean(startedAt && now - startedAt >= ADMIN_ACTIVE_TEAM_DELETE_MS_V196);
+}
+
+async function handleAdminTeamCleanupV196(request, response) {
+  if (!isAdminRequest(request)) {
+    sendJson(response, 401, { message: "Connexion gestion requise." });
+    return true;
+  }
+  if (request.method !== "POST") {
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+  try {
+    const body = await readRequestBody(request);
+    if (Buffer.byteLength(body, "utf8") > 4096) throw new Error("Requete trop volumineuse.");
+    const payload = body ? JSON.parse(body) : {};
+    const teamId = compactText(payload.teamId).slice(0, 160);
+    if (payload.action !== "delete-stale-team" || !teamId) {
+      sendJson(response, 400, { message: "Action de suppression invalide." });
+      return true;
+    }
+    const result = await withDataMutation(async () => {
+      const stored = await readStoredData();
+      if (!stored) return { status: 404, payload: { message: "Donnees serveur absentes." } };
+      const team = stored.teams.find((item) => item?.id === teamId);
+      if (!team) return { status: 404, payload: { message: "Equipe deja retiree." } };
+      if (!adminTeamDeleteAllowedV196(team)) {
+        return { status: 409, payload: { message: team.status === "briefing" ? "Ce briefing a ete actif il y a moins d'une heure." : "Cette equipe ne peut pas encore etre supprimee." } };
+      }
+
+      const deletedAt = Date.now();
+      const nextData = {
+        ...stored,
+        teams: stored.teams.filter((item) => item?.id !== teamId),
+        codes: stored.codes.map((item) => ({ ...item })),
+      };
+      const code = nextData.codes.find((item) => item?.teamId === teamId || item?.code === team.code);
+      if (code) {
+        code.teamId = null;
+        code.status = "used";
+        code.teamDeletedAt = deletedAt;
+      }
+      await createAdminPreSaveBackupV167(stored, nextData);
+      await writeStoredData(nextData);
+      return { status: 200, payload: { ok: true, deletedTeamId: teamId, codePreserved: Boolean(code), deletedAt } };
+    });
+    sendJson(response, result.status, result.payload);
+  } catch (error) {
+    sendJson(response, 400, { message: error.message || "Suppression de l'equipe impossible." });
+  }
+  return true;
+}
+
+
 /* final-system-v189 */
 const PUBLIC_CATALOG_CACHE_MS_V189 = 60 * 1000;
 const PLAYER_ACTIVATION_WINDOW_MS_V189 = 5 * 60 * 1000;
@@ -4297,6 +4374,10 @@ async function handleApi(request, response, pathname) {
 
   if (pathname === "/api/player/team-sync") {
     return handlePlayerTeamSyncV187(request, response);
+  }
+
+  if (pathname === "/api/admin/team-cleanup") {
+    return handleAdminTeamCleanupV196(request, response);
   }
 
   if (pathname === "/api/public/catalog") return handlePublicCatalogV189(request, response);
