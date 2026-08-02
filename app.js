@@ -2604,6 +2604,7 @@ function playerGuidanceLabelsV183() {
       arrived: "Vous êtes arrivé dans la zone",
       direction: (value) => "Direction " + value,
       compass: "La flèche suit l'orientation du téléphone",
+      movement: "La flèche suit votre direction de déplacement",
       fallback: "Direction générale sur une carte orientée au nord",
       precise: (value) => "GPS précis à ±" + value + " m",
       weak: (value) => "Signal GPS imprécis (±" + value + " m) · placez-vous à découvert",
@@ -2618,6 +2619,7 @@ function playerGuidanceLabelsV183() {
       arrived: "You have reached the target area",
       direction: (value) => "Direction " + value,
       compass: "The arrow follows your phone orientation",
+      movement: "The arrow follows your direction of travel",
       fallback: "General direction on a north-up map",
       precise: (value) => "GPS accuracy ±" + value + " m",
       weak: (value) => "Weak GPS signal (±" + value + " m) · move into an open area",
@@ -2632,6 +2634,7 @@ function playerGuidanceLabelsV183() {
       arrived: "Je bent in de doelzone aangekomen",
       direction: (value) => "Richting " + value,
       compass: "De pijl volgt de richting van je telefoon",
+      movement: "De pijl volgt je bewegingsrichting",
       fallback: "Algemene richting op een kaart met het noorden bovenaan",
       precise: (value) => "GPS-nauwkeurigheid ±" + value + " m",
       weak: (value) => "Zwak GPS-signaal (±" + value + " m) · ga naar een open plek",
@@ -2648,13 +2651,15 @@ function normalizeGuidanceAngleV183(value) {
 
 /* player-compass-smooth-v188 */
 const PLAYER_COMPASS_ACTIVE_INTERVAL_V188 = 1000;
-const PLAYER_COMPASS_IDLE_INTERVAL_V188 = 60000;
+const PLAYER_COMPASS_IDLE_INTERVAL_V188 = 1000;
+const PLAYER_COMPASS_SENSOR_SAMPLE_INTERVAL_V195 = 200;
 let playerPendingHeadingV188 = null;
 let playerCompassPaintTimerV188 = null;
 let playerCompassLastAppliedAtV188 = 0;
 let playerCompassSmoothedHeadingV188 = null;
 let playerMapContinuousHeadingV188 = null;
 let playerLastAbsoluteHeadingAtV188 = 0;
+let playerLastCompassSampleAtV195 = 0;
 
 function playerScreenAngleV188() {
   const orientationAngle = Number(window.screen?.orientation?.angle);
@@ -2750,6 +2755,9 @@ function playerContinuousMapHeadingV188(heading) {
 
 function handlePlayerOrientationV183(event) {
   if (document.visibilityState === "hidden") return;
+  const sampledAt = Date.now();
+  if (sampledAt - playerLastCompassSampleAtV195 < PLAYER_COMPASS_SENSOR_SAMPLE_INTERVAL_V195) return;
+  playerLastCompassSampleAtV195 = sampledAt;
   const heading = playerEventHeadingV188(event);
   if (!Number.isFinite(heading)) return;
   playerCompassPermissionStateV185 = "granted";
@@ -2860,16 +2868,18 @@ function updatePlayerMapGuidanceV183(team, puzzle, target, playerPosition) {
   const remaining = Math.max(0, distance - radius);
   const bearing = playerMapBearingV182(playerPosition, target);
   const cardinal = playerMapCardinalV182(bearing);
-  const phoneHeading = Number.isFinite(playerCompassHeadingV183)
+  const hasCompassHeading = Number.isFinite(playerCompassHeadingV183);
+  const hasMovementHeading = Number.isFinite(playerMovementHeadingV183);
+  const phoneHeading = hasCompassHeading
     ? playerCompassHeadingV183
-    : Number.isFinite(playerMovementHeadingV183)
-      ? playerMovementHeadingV183
-      : null;
+    : hasMovementHeading ? playerMovementHeadingV183 : null;
   const rotation = Number.isFinite(phoneHeading)
     ? normalizeGuidanceAngleV183(bearing - phoneHeading)
     : bearing;
   arrow.style.setProperty("--player-guidance-rotation", rotation + "deg");
-  directionNode.textContent = Number.isFinite(phoneHeading) ? labels.compass : labels.direction(cardinal) + " · " + labels.fallback;
+  directionNode.textContent = hasCompassHeading
+    ? labels.compass
+    : hasMovementHeading ? labels.movement : labels.direction(cardinal) + " · " + labels.fallback;
   distanceNode.textContent = distance <= radius ? "✓" : playerMapDistanceV182(remaining);
   distanceLabel.textContent = distance <= radius ? labels.arrived : labels.toZone;
 
@@ -3096,6 +3106,7 @@ function updatePlayerOrientationPermissionNoticeV185(kind, options = {}) {
     const team = getCurrentTeam();
     const route = team ? getRoute(team.routeId) : null;
     updateBriefingLocationUi(team, route, { kind: kind === "denied" || kind === "unsupported" ? "blocked" : "active", text: message });
+    window.updatePlayerCompassControlV195?.();
     return;
   }
   const signal = document.querySelector("#player-navigation-signal");
@@ -3104,6 +3115,7 @@ function updatePlayerOrientationPermissionNoticeV185(kind, options = {}) {
     signal.classList.remove("is-good", "is-weak", "is-stale");
     signal.classList.add(kind === "granted" ? "is-good" : "is-weak");
   }
+  window.updatePlayerCompassControlV195?.();
 }
 
 function updatePlayerGuidanceArrowHeadingV185(heading) {
@@ -3123,6 +3135,7 @@ function updatePlayerGuidanceArrowHeadingV185(heading) {
 function requestPlayerOrientationPermissionV185(options = {}) {
   if (playerCompassBoundV183 || playerCompassPermissionStateV185 === "granted") {
     updatePlayerOrientationPermissionNoticeV185("granted", options);
+    window.updatePlayerCompassControlV195?.();
     return Promise.resolve(true);
   }
   if (playerCompassPermissionRequestV185) return playerCompassPermissionRequestV185;
@@ -3160,6 +3173,7 @@ function requestPlayerOrientationPermissionV185(options = {}) {
       return false;
     } finally {
       playerCompassPermissionRequestV185 = null;
+      window.updatePlayerCompassControlV195?.();
     }
   })();
 
@@ -3553,6 +3567,7 @@ function startAdventure() {
     showToast("Localisez votre equipe au point de depart avant de commencer.");
     return;
   }
+  requestPlayerOrientationPermissionV185({ showNotice: true });
   stopBriefingGeolocationWatch();
   team.status = "playing";
   team.startAt = Date.now();
@@ -10204,17 +10219,17 @@ window.__stripeTeamCountV180 = true;
         briefingSteps: [
           "Rejoignez le point de départ indiqué sur la carte.",
           "Appuyez sur « Vérifier ma position » et acceptez les autorisations demandées.",
-          "Quand la position est validée en vert, lancez l'aventure.",
+          "Quand la position est validée en vert, lancez l'aventure et autorisez la boussole.",
         ],
         locate: "1. Vérifier ma position",
         refresh: "1. Actualiser ma position",
         start: "2. Commencer l'aventure",
-        startHint: "Le bouton de départ s'active seulement lorsque votre équipe est dans la zone.",
+        startHint: "Au lancement, autorisez la boussole pour que la flèche suive votre téléphone.",
         help: "Comment jouer ?",
         gameKicker: "Première étape",
         gameTitle: "Laissez l'application vous guider",
         gameSteps: [
-          "Activez le mode guidage ci-dessous.",
+          "La flèche suit votre téléphone. Le mode guidage agrandit la carte si besoin.",
           "Marchez vers le point jaune en restant sur les chemins autorisés.",
           "Dans la zone, l'énigme se déverrouille automatiquement : observez les lieux et répondez.",
         ],
@@ -10222,7 +10237,7 @@ window.__stripeTeamCountV180 = true;
         read: "Voir l'énigme",
         hide: "J'ai compris",
         nextBriefing: "Rejoignez le départ, puis vérifiez votre position GPS.",
-        nextLocked: "Activez le guidage et rejoignez le point jaune.",
+        nextLocked: "Suivez la flèche ou activez le guidage, puis rejoignez le point jaune.",
         nextUnlocked: "Lisez l'énigme, observez autour de vous et validez votre réponse.",
       },
       en: {
@@ -10235,17 +10250,17 @@ window.__stripeTeamCountV180 = true;
         briefingSteps: [
           "Go to the starting point shown on the map.",
           "Tap “Check my position” and allow the requested permissions.",
-          "When your position turns green, start the adventure.",
+          "When your position turns green, start the adventure and allow compass access.",
         ],
         locate: "1. Check my position",
         refresh: "1. Refresh my position",
         start: "2. Start the adventure",
-        startHint: "The start button is enabled only when your team is inside the starting area.",
+        startHint: "When starting, allow compass access so the arrow follows your phone.",
         help: "How to play",
         gameKicker: "First step",
         gameTitle: "Let the app guide you",
         gameSteps: [
-          "Turn on guidance mode below.",
+          "The arrow follows your phone. Guidance mode enlarges the map when needed.",
           "Walk towards the yellow point and stay on authorised paths.",
           "Inside the area, the puzzle unlocks automatically: observe your surroundings and answer.",
         ],
@@ -10253,7 +10268,7 @@ window.__stripeTeamCountV180 = true;
         read: "View the puzzle",
         hide: "Got it",
         nextBriefing: "Reach the start, then check your GPS position.",
-        nextLocked: "Turn on guidance and reach the yellow point.",
+        nextLocked: "Follow the arrow or turn on guidance, then reach the yellow point.",
         nextUnlocked: "Read the puzzle, look around you and submit your answer.",
       },
       nl: {
@@ -10266,17 +10281,17 @@ window.__stripeTeamCountV180 = true;
         briefingSteps: [
           "Ga naar het startpunt dat op de kaart staat.",
           "Tik op ‘Mijn positie controleren’ en sta de gevraagde machtigingen toe.",
-          "Wanneer je positie groen wordt, start je het avontuur.",
+          "Wanneer je positie groen wordt, start je het avontuur en sta je het kompas toe.",
         ],
         locate: "1. Mijn positie controleren",
         refresh: "1. Mijn positie vernieuwen",
         start: "2. Het avontuur starten",
-        startHint: "De startknop wordt pas actief wanneer je team in de startzone is.",
+        startHint: "Sta bij het starten het kompas toe zodat de pijl je telefoon volgt.",
         help: "Hoe speel je?",
         gameKicker: "Eerste stap",
         gameTitle: "Laat de app je begeleiden",
         gameSteps: [
-          "Schakel hieronder de begeleidingsmodus in.",
+          "De pijl volgt je telefoon. De begeleidingsmodus vergroot de kaart wanneer nodig.",
           "Loop naar de gele stip en blijf op de toegestane paden.",
           "In de zone wordt het raadsel automatisch ontgrendeld: kijk om je heen en antwoord.",
         ],
@@ -10284,7 +10299,7 @@ window.__stripeTeamCountV180 = true;
         read: "Bekijk het raadsel",
         hide: "Begrepen",
         nextBriefing: "Ga naar de start en controleer daarna je gps-positie.",
-        nextLocked: "Schakel de begeleiding in en bereik de gele stip.",
+        nextLocked: "Volg de pijl of schakel begeleiding in en bereik de gele stip.",
         nextUnlocked: "Lees het raadsel, kijk om je heen en verstuur je antwoord.",
       },
     };
@@ -10503,4 +10518,125 @@ window.__stripeTeamCountV180 = true;
   window.addEventListener("hashchange", function () { window.setTimeout(update, 100); });
   update();
   window.setTimeout(update, 300);
+})();
+
+
+/* player-compass-always-on-v195 */
+(function initPlayerCompassAlwaysOnV195() {
+  if (window.__playerCompassAlwaysOnV195) return;
+  window.__playerCompassAlwaysOnV195 = true;
+
+  let automaticBindingPending = false;
+
+  function language() {
+    return typeof playerLangV151 === "function" ? playerLangV151() : "fr";
+  }
+
+  function labels() {
+    const values = {
+      fr: {
+        activate: "Activer la flèche directionnelle",
+        retry: "Réactiver la flèche directionnelle",
+        activating: "Activation de la boussole...",
+        title: "Autorise les mouvements du téléphone sans ouvrir le mode guidage.",
+      },
+      en: {
+        activate: "Turn on the direction arrow",
+        retry: "Turn the direction arrow back on",
+        activating: "Turning on compass...",
+        title: "Allows phone movement without opening guidance mode.",
+      },
+      nl: {
+        activate: "Richtingspijl activeren",
+        retry: "Richtingspijl opnieuw activeren",
+        activating: "Kompas activeren...",
+        title: "Staat telefoonbeweging toe zonder de begeleidingsmodus te openen.",
+      },
+    };
+    return values[language()] || values.fr;
+  }
+
+  function isTouchPhone() {
+    return Number(navigator.maxTouchPoints) > 0 || /android|iphone|ipad|ipod/i.test(navigator.userAgent || "");
+  }
+
+  function ensureButton() {
+    const summary = document.querySelector("#player-navigation-summary");
+    if (!summary) return null;
+    let button = document.querySelector("#player-compass-enable-v195");
+    if (!button) {
+      button = document.createElement("button");
+      button.id = "player-compass-enable-v195";
+      button.className = "secondary-button player-compass-enable-v195";
+      button.type = "button";
+      button.addEventListener("click", async function () {
+        const copy = labels();
+        button.disabled = true;
+        button.textContent = copy.activating;
+        await requestPlayerOrientationPermissionV185({ showNotice: true });
+        update();
+      });
+      summary.insertAdjacentElement("afterend", button);
+    }
+    return button;
+  }
+
+  function tryAutomaticAndroidBinding(team) {
+    const orientation = window.DeviceOrientationEvent;
+    if (
+      !team
+      || team.status !== "playing"
+      || !orientation
+      || typeof orientation.requestPermission === "function"
+      || playerCompassBoundV183
+      || automaticBindingPending
+    ) return;
+    automaticBindingPending = true;
+    enablePlayerCompassV183().finally(function () {
+      automaticBindingPending = false;
+      update();
+    });
+  }
+
+  function update() {
+    const button = ensureButton();
+    if (!button) return;
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    const orientationSupported = Boolean(window.DeviceOrientationEvent);
+    const compassReady = playerCompassBoundV183 || playerCompassPermissionStateV185 === "granted";
+    const shouldShow = Boolean(
+      team?.status === "playing"
+      && isTouchPhone()
+      && orientationSupported
+      && !compassReady
+      && playerCompassPermissionStateV185 !== "unsupported"
+    );
+    const copy = labels();
+    button.hidden = !shouldShow;
+    button.disabled = Boolean(playerCompassPermissionRequestV185);
+    button.textContent = playerCompassPermissionRequestV185
+      ? copy.activating
+      : playerCompassPermissionStateV185 === "denied" ? copy.retry : copy.activate;
+    button.title = copy.title;
+    button.classList.toggle("is-warning", playerCompassPermissionStateV185 === "denied");
+    tryAutomaticAndroidBinding(team);
+  }
+
+  window.updatePlayerCompassControlV195 = update;
+
+  if (typeof renderPlayer === "function" && !renderPlayer.__compassAlwaysOnV195) {
+    const previousRenderPlayerV195 = renderPlayer;
+    renderPlayer = function renderPlayerCompassAlwaysOnV195() {
+      const result = previousRenderPlayerV195.apply(this, arguments);
+      window.setTimeout(update, 0);
+      return result;
+    };
+    renderPlayer.__compassAlwaysOnV195 = true;
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") window.setTimeout(update, 100);
+  });
+  window.addEventListener("hashchange", function () { window.setTimeout(update, 0); });
+  window.setTimeout(update, 0);
 })();
