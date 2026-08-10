@@ -1,9 +1,9 @@
-const CACHE_NAME = "escape-erezee-v196";
+const CACHE_NAME = "escape-erezee-v197";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=196",
-  "./app.js?v=196",
+  "./styles.css?v=197",
+  "./app.js?v=197",
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./assets/home-hero-vicinal-v90.jpg?v=90",

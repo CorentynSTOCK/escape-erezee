@@ -3567,6 +3567,13 @@ function startAdventure() {
     showToast("Localisez votre equipe au point de depart avant de commencer.");
     return;
   }
+  if (
+    typeof window.openPlayerTutorialV197 === "function"
+    && !window.playerTutorialCompletedV197?.(team.id)
+  ) {
+    window.openPlayerTutorialV197({ startAfter: true });
+    return;
+  }
   requestPlayerOrientationPermissionV185({ showNotice: true });
   stopBriefingGeolocationWatch();
   team.status = "playing";
@@ -5365,10 +5372,12 @@ function registerServiceWorker() {
 }
 
 bindEvents();
-setHashView();
 startTicker();
 registerServiceWorker();
-syncDataFromServer().finally(handleCheckoutReturn);
+window.setTimeout(() => {
+  setHashView();
+  syncDataFromServer().finally(handleCheckoutReturn);
+}, 0);
 
 
 /* player-rescue-v101 */
@@ -7032,6 +7041,377 @@ escapeI18nInstall();
   window.setTimeout(() => {
     if (typeof escapeI18nApplyDom === 'function') escapeI18nApplyDom();
   }, 0);
+})();
+
+
+/* player-prestart-tutorial-v197 */
+(function initPlayerPrestartTutorialV197() {
+  if (window.__playerPrestartTutorialV197) return;
+  window.__playerPrestartTutorialV197 = true;
+
+  const STORAGE_PREFIX = "escape-erezee-tutorial-v197:";
+  const completedTeamIds = new Set();
+  let state = null;
+  let lastFocusedElement = null;
+
+  function language() {
+    return typeof playerLangV151 === "function" ? playerLangV151() : "fr";
+  }
+
+  function labels() {
+    const values = {
+      fr: {
+        open: "Voir le tutoriel (1 min)",
+        title: "Bien utiliser votre guide de jeu",
+        close: "Fermer le tutoriel",
+        step: "Étape {current} sur {total}",
+        back: "Précédent",
+        next: "Suivant",
+        finish: "J'ai compris, démarrer",
+        reviewed: "Fermer le tutoriel",
+        confirm: "J'ai compris comment utiliser la carte et je reste attentif à mon environnement.",
+        steps: [
+          {
+            kicker: "Carte et direction",
+            title: "Suivez la flèche jusqu'au point jaune",
+            text: "Le point bleu représente votre position. Le point jaune est votre prochaine étape. Tournez doucement le téléphone : la flèche indique la direction à suivre.",
+            visual: ["Votre position", "Direction", "Prochaine étape"],
+          },
+          {
+            kicker: "Énigmes",
+            title: "Entrez dans la zone pour débloquer l'étape",
+            text: "En approchant du point jaune, l'énigme se déverrouille automatiquement. Observez les lieux, saisissez votre réponse et utilisez un indice seulement si nécessaire.",
+            visual: ["Approchez", "Déverrouillez", "Répondez"],
+          },
+          {
+            kicker: "Pendant le parcours",
+            title: "Gardez l'application ouverte et jouez prudemment",
+            text: "Restez sur les chemins autorisés, arrêtez-vous pour regarder l'écran et gardez votre téléphone chargé. Le guidage plein écran reste disponible si vous avez besoin d'une carte plus grande.",
+            visual: ["Chemins autorisés", "Arrêt pour lire", "Téléphone chargé"],
+          },
+        ],
+      },
+      en: {
+        open: "View the tutorial (1 min)",
+        title: "How to use your game guide",
+        close: "Close the tutorial",
+        step: "Step {current} of {total}",
+        back: "Back",
+        next: "Next",
+        finish: "I understand, start",
+        reviewed: "Close the tutorial",
+        confirm: "I understand how to use the map and will stay aware of my surroundings.",
+        steps: [
+          {
+            kicker: "Map and direction",
+            title: "Follow the arrow to the yellow point",
+            text: "The blue point is your position. The yellow point is your next step. Slowly turn your phone: the arrow shows which direction to follow.",
+            visual: ["Your position", "Direction", "Next step"],
+          },
+          {
+            kicker: "Puzzles",
+            title: "Enter the area to unlock the step",
+            text: "As you approach the yellow point, the puzzle unlocks automatically. Observe the location, enter your answer and use a hint only when needed.",
+            visual: ["Approach", "Unlock", "Answer"],
+          },
+          {
+            kicker: "During the game",
+            title: "Keep the app open and play safely",
+            text: "Stay on authorised paths, stop walking when looking at the screen and keep your phone charged. Full-screen guidance is available when you need a larger map.",
+            visual: ["Authorised paths", "Stop to read", "Charged phone"],
+          },
+        ],
+      },
+      nl: {
+        open: "Bekijk de uitleg (1 min)",
+        title: "Zo gebruik je de spelbegeleiding",
+        close: "Uitleg sluiten",
+        step: "Stap {current} van {total}",
+        back: "Vorige",
+        next: "Volgende",
+        finish: "Ik begrijp het, starten",
+        reviewed: "Uitleg sluiten",
+        confirm: "Ik begrijp hoe ik de kaart gebruik en blijf aandachtig voor mijn omgeving.",
+        steps: [
+          {
+            kicker: "Kaart en richting",
+            title: "Volg de pijl naar de gele stip",
+            text: "De blauwe stip is je positie. De gele stip is je volgende etappe. Draai je telefoon langzaam: de pijl toont welke richting je moet volgen.",
+            visual: ["Jouw positie", "Richting", "Volgende etappe"],
+          },
+          {
+            kicker: "Raadsels",
+            title: "Ga de zone binnen om de etappe te ontgrendelen",
+            text: "Wanneer je de gele stip nadert, wordt het raadsel automatisch ontgrendeld. Kijk goed rond, vul je antwoord in en gebruik alleen een hint als dat nodig is.",
+            visual: ["Benader", "Ontgrendel", "Beantwoord"],
+          },
+          {
+            kicker: "Tijdens het parcours",
+            title: "Houd de app open en speel veilig",
+            text: "Blijf op toegestane paden, stop met lopen wanneer je naar het scherm kijkt en houd je telefoon opgeladen. Begeleiding op volledig scherm blijft beschikbaar voor een grotere kaart.",
+            visual: ["Toegestane paden", "Stop om te lezen", "Telefoon opgeladen"],
+          },
+        ],
+      },
+    };
+    return values[language()] || values.fr;
+  }
+
+  function storageKey(teamId) {
+    return STORAGE_PREFIX + encodeURIComponent(String(teamId || ""));
+  }
+
+  function isCompleted(teamId) {
+    if (!teamId) return false;
+    if (completedTeamIds.has(String(teamId))) return true;
+    try {
+      return localStorage.getItem(storageKey(teamId)) === "1";
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function markCompleted(teamId) {
+    if (!teamId) return;
+    completedTeamIds.add(String(teamId));
+    try {
+      localStorage.setItem(storageKey(teamId), "1");
+    } catch (_error) {
+      // The in-memory flag still prevents the tutorial from looping in this session.
+    }
+  }
+
+  function ensureDialog() {
+    let overlay = document.querySelector("#player-tutorial-overlay-v197");
+    if (overlay) return overlay;
+
+    overlay = document.createElement("div");
+    overlay.id = "player-tutorial-overlay-v197";
+    overlay.className = "player-tutorial-overlay-v197";
+    overlay.hidden = true;
+    overlay.innerHTML = [
+      '<section class="player-tutorial-dialog-v197" role="dialog" aria-modal="true" aria-labelledby="player-tutorial-title-v197">',
+        '<header class="player-tutorial-header-v197">',
+          '<div><p id="player-tutorial-progress-label-v197"></p><h2 id="player-tutorial-title-v197"></h2></div>',
+          '<button class="player-tutorial-close-v197" type="button" data-tutorial-action-v197="close" aria-label=""></button>',
+        '</header>',
+        '<div class="player-tutorial-progress-v197" aria-hidden="true"><i></i><i></i><i></i></div>',
+        '<div class="player-tutorial-content-v197">',
+          '<p class="player-tutorial-kicker-v197" id="player-tutorial-kicker-v197"></p>',
+          '<h3 id="player-tutorial-step-title-v197"></h3>',
+          '<p id="player-tutorial-step-text-v197"></p>',
+          '<div class="player-tutorial-visual-v197" id="player-tutorial-visual-v197" aria-hidden="true"></div>',
+          '<label class="player-tutorial-confirm-v197" id="player-tutorial-confirm-row-v197" hidden>',
+            '<input id="player-tutorial-confirm-v197" type="checkbox" />',
+            '<span id="player-tutorial-confirm-label-v197"></span>',
+          '</label>',
+        '</div>',
+        '<footer class="player-tutorial-actions-v197">',
+          '<button class="secondary-button" type="button" data-tutorial-action-v197="back"></button>',
+          '<button class="primary-button" type="button" data-tutorial-action-v197="next"></button>',
+        '</footer>',
+      '</section>',
+    ].join("");
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("click", function (event) {
+      const action = event.target.closest("[data-tutorial-action-v197]")?.dataset.tutorialActionV197;
+      if (action === "close" || event.target === overlay) {
+        closeTutorial();
+      } else if (action === "back") {
+        state.step = Math.max(0, state.step - 1);
+        renderDialog();
+      } else if (action === "next") {
+        completeStep();
+      }
+    });
+    overlay.querySelector("#player-tutorial-confirm-v197")?.addEventListener("change", renderDialog);
+    return overlay;
+  }
+
+  function visualMarkup(step, visual) {
+    if (step === 0) {
+      return [
+        '<div class="player-tutorial-map-v197">',
+          '<span class="player-tutorial-route-v197"></span>',
+          '<span class="player-tutorial-user-v197"></span>',
+          '<span class="player-tutorial-arrow-v197"></span>',
+          '<span class="player-tutorial-target-v197"></span>',
+        '</div>',
+        '<div class="player-tutorial-legend-v197">',
+          '<span><i data-tone="user"></i>' + escapeHtml(visual[0]) + '</span>',
+          '<span><i data-tone="direction"></i>' + escapeHtml(visual[1]) + '</span>',
+          '<span><i data-tone="target"></i>' + escapeHtml(visual[2]) + '</span>',
+        '</div>',
+      ].join("");
+    }
+    if (step === 1) {
+      return '<div class="player-tutorial-flow-v197">' + visual.map(function (label, index) {
+        return '<span><b>' + (index + 1) + '</b><small>' + escapeHtml(label) + '</small></span>';
+      }).join("") + '</div>';
+    }
+    return '<div class="player-tutorial-checks-v197">' + visual.map(function (label) {
+      return '<span><b aria-hidden="true">✓</b>' + escapeHtml(label) + '</span>';
+    }).join("") + '</div>';
+  }
+
+  function renderDialog() {
+    const overlay = ensureDialog();
+    if (!state || overlay.hidden) return;
+    const copy = labels();
+    const current = copy.steps[state.step];
+    const isLast = state.step === copy.steps.length - 1;
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    const mustConfirm = team?.status === "briefing" && !isCompleted(state.teamId);
+    const checkbox = overlay.querySelector("#player-tutorial-confirm-v197");
+    const confirmRow = overlay.querySelector("#player-tutorial-confirm-row-v197");
+    const nextButton = overlay.querySelector('[data-tutorial-action-v197="next"]');
+
+    overlay.querySelector("#player-tutorial-progress-label-v197").textContent = copy.step
+      .replace("{current}", String(state.step + 1))
+      .replace("{total}", String(copy.steps.length));
+    overlay.querySelector("#player-tutorial-title-v197").textContent = copy.title;
+    overlay.querySelector("#player-tutorial-kicker-v197").textContent = current.kicker;
+    overlay.querySelector("#player-tutorial-step-title-v197").textContent = current.title;
+    overlay.querySelector("#player-tutorial-step-text-v197").textContent = current.text;
+    overlay.querySelector("#player-tutorial-visual-v197").innerHTML = visualMarkup(state.step, current.visual);
+    overlay.querySelector("#player-tutorial-confirm-label-v197").textContent = copy.confirm;
+    overlay.querySelector(".player-tutorial-close-v197").setAttribute("aria-label", copy.close);
+    overlay.querySelector(".player-tutorial-close-v197").title = copy.close;
+    overlay.querySelector('[data-tutorial-action-v197="back"]').textContent = copy.back;
+    overlay.querySelector('[data-tutorial-action-v197="back"]').hidden = state.step === 0;
+    overlay.querySelectorAll(".player-tutorial-progress-v197 i").forEach(function (dot, index) {
+      dot.classList.toggle("is-active", index <= state.step);
+    });
+
+    confirmRow.hidden = !(isLast && mustConfirm);
+    if (!isLast) {
+      nextButton.textContent = copy.next;
+      nextButton.disabled = false;
+    } else {
+      nextButton.textContent = state.startAfter ? copy.finish : copy.reviewed;
+      nextButton.disabled = mustConfirm && !checkbox.checked;
+    }
+  }
+
+  function closeTutorial() {
+    const overlay = document.querySelector("#player-tutorial-overlay-v197");
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    document.body.classList.remove("player-tutorial-open-v197");
+    state = null;
+    if (lastFocusedElement?.isConnected) lastFocusedElement.focus({ preventScroll: true });
+    lastFocusedElement = null;
+  }
+
+  function completeStep() {
+    if (!state) return;
+    const copy = labels();
+    if (state.step < copy.steps.length - 1) {
+      state.step += 1;
+      renderDialog();
+      document.querySelector(".player-tutorial-dialog-v197")?.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    const mustConfirm = team?.status === "briefing" && !isCompleted(state.teamId);
+    const checkbox = document.querySelector("#player-tutorial-confirm-v197");
+    if (mustConfirm && !checkbox?.checked) return;
+    const shouldStart = state.startAfter && team?.status === "briefing";
+    if (team?.status === "briefing") markCompleted(state.teamId);
+    closeTutorial();
+    updateEntryButton();
+    if (shouldStart) startAdventure();
+  }
+
+  function openTutorial(options) {
+    const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+    if (!team) return;
+    const overlay = ensureDialog();
+    lastFocusedElement = document.activeElement;
+    state = {
+      step: 0,
+      startAfter: Boolean(options?.startAfter),
+      teamId: team.id,
+    };
+    const checkbox = overlay.querySelector("#player-tutorial-confirm-v197");
+    if (checkbox) checkbox.checked = false;
+    overlay.hidden = false;
+    document.body.classList.add("player-tutorial-open-v197");
+    renderDialog();
+    window.setTimeout(function () {
+      overlay.querySelector('[data-tutorial-action-v197="next"]')?.focus();
+    }, 0);
+  }
+
+  function updateEntryButton() {
+    const locateButton = document.querySelector("#briefing-locate-button");
+    if (locateButton) {
+      let button = document.querySelector("#player-tutorial-open-v197");
+      if (!button) {
+        button = document.createElement("button");
+        button.id = "player-tutorial-open-v197";
+        button.className = "secondary-button full-button player-tutorial-open-v197";
+        button.type = "button";
+        locateButton.insertAdjacentElement("beforebegin", button);
+      }
+      const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
+      button.onclick = function () { openTutorial({ review: true }); };
+      button.textContent = labels().open;
+      button.hidden = team?.status !== "briefing";
+    }
+
+    const helpButton = document.querySelector("#player-help-button-v192");
+    if (helpButton) {
+      helpButton.onclick = function () { openTutorial({ review: true }); };
+    }
+  }
+
+  function handleKeydown(event) {
+    const overlay = document.querySelector("#player-tutorial-overlay-v197");
+    if (!state || !overlay || overlay.hidden) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTutorial();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(overlay.querySelectorAll('button:not([hidden]):not([disabled]), input:not([hidden]):not([disabled])'));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  window.playerTutorialCompletedV197 = isCompleted;
+  window.openPlayerTutorialV197 = openTutorial;
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest?.("#player-help-button-v192")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    openTutorial({ review: true });
+  }, true);
+  document.addEventListener("keydown", handleKeydown);
+
+  if (typeof renderPlayer === "function" && !renderPlayer.__prestartTutorialV197) {
+    const previousRenderPlayerV197 = renderPlayer;
+    renderPlayer = function renderPlayerPrestartTutorialV197() {
+      const result = previousRenderPlayerV197.apply(this, arguments);
+      window.setTimeout(updateEntryButton, 0);
+      return result;
+    };
+    renderPlayer.__prestartTutorialV197 = true;
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { window.setTimeout(updateEntryButton, 300); });
+  window.addEventListener("hashchange", function () { window.setTimeout(updateEntryButton, 100); });
+  window.setTimeout(updateEntryButton, 300);
 })();
 
 
@@ -10391,13 +10771,17 @@ window.__stripeTeamCountV180 = true;
       button.id = "player-help-button-v192";
       button.className = "player-help-button-v192";
       button.type = "button";
-      button.addEventListener("click", function () {
-        helpRequested = true;
-        update();
-        document.querySelector("#player-game-guide-v192")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
       stepper.insertAdjacentElement("afterend", button);
     }
+    button.onclick = function () {
+      if (typeof window.openPlayerTutorialV197 === "function") {
+        window.openPlayerTutorialV197({ review: true });
+        return;
+      }
+      helpRequested = true;
+      update();
+      document.querySelector("#player-game-guide-v192")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
     button.textContent = copy.help;
     button.hidden = context.team?.status !== "playing";
   }
@@ -10428,7 +10812,8 @@ window.__stripeTeamCountV180 = true;
 
     const isPlaying = context.team?.status === "playing";
     const isFirstPuzzle = isPlaying && Number(context.progress?.solved || 0) === 0;
-    const shouldShow = isPlaying && (helpRequested || (isFirstPuzzle && !firstGuideDismissed));
+    const completedTutorial = window.playerTutorialCompletedV197?.(context.team?.id);
+    const shouldShow = isPlaying && (helpRequested || (isFirstPuzzle && !firstGuideDismissed && !completedTutorial));
     guide.classList.toggle("is-hidden", !shouldShow);
     if (!isPlaying) return;
 
