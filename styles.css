@@ -2203,7 +2203,7 @@ td {
   }
 }
 
-/* player-prestart-tutorial-v197 */
+/* player-immersive-tutorial-v198 */
 body.player-tutorial-open-v197 {
   overflow: hidden;
 }
@@ -2291,7 +2291,7 @@ body.player-tutorial-open-v197 {
 
 .player-tutorial-progress-v197 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 0 18px;
 }
@@ -2499,6 +2499,341 @@ body.player-tutorial-open-v197 {
   border-radius: 50%;
   background: #dff2e8;
   color: #17633f;
+}
+
+.player-tutorial-visual-v197.is-practice-v198 {
+  min-height: 270px;
+  align-items: stretch;
+  padding: 14px;
+  background: #f7faf8;
+}
+
+.player-tutorial-practice-v198 {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  align-content: center;
+}
+
+.player-tutorial-practice-instruction-v198 {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  color: #29413a;
+  font-size: 0.86rem;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.player-tutorial-practice-instruction-v198 b {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.player-tutorial-practice-map-v198 {
+  position: relative;
+  width: 100%;
+  height: 148px;
+  overflow: hidden;
+  border: 1px solid #cddbd5;
+  border-radius: 8px;
+  background-color: #e3ece6;
+  background-image:
+    linear-gradient(31deg, transparent 43%, rgba(255, 255, 255, 0.92) 44%, rgba(255, 255, 255, 0.92) 51%, transparent 52%),
+    linear-gradient(142deg, transparent 41%, rgba(190, 208, 197, 0.75) 42%, rgba(190, 208, 197, 0.75) 47%, transparent 48%);
+}
+
+.player-tutorial-practice-route-v198 {
+  position: absolute;
+  top: 76px;
+  left: 68px;
+  width: calc(100% - 145px);
+  border-top: 4px dashed #d29827;
+  transform: rotate(-14deg);
+  transform-origin: left center;
+}
+
+.player-tutorial-practice-user-v198 {
+  position: absolute;
+  z-index: 3;
+  bottom: 22px;
+  left: 46px;
+  width: 22px;
+  height: 22px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #1877d2;
+  box-shadow: 0 2px 8px rgba(11, 46, 38, 0.3);
+}
+
+.player-tutorial-practice-arrow-v198 {
+  position: absolute;
+  z-index: 2;
+  bottom: 44px;
+  left: 80px;
+  width: 0;
+  height: 0;
+  border-right: 10px solid transparent;
+  border-bottom: 31px solid var(--green);
+  border-left: 10px solid transparent;
+  transform: rotate(58deg);
+  transform-origin: 50% 80%;
+  animation: player-tutorial-arrow-guide-v198 1.25s ease-in-out infinite;
+}
+
+.player-tutorial-practice-map-v198 button {
+  position: absolute;
+  z-index: 4;
+  top: 16px;
+  right: 28px;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.player-tutorial-practice-map-v198 button span {
+  position: relative;
+  display: block;
+  width: 25px;
+  height: 25px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #e2a226;
+  box-shadow: 0 2px 8px rgba(11, 46, 38, 0.28);
+}
+
+.player-tutorial-practice-map-v198 button span::after {
+  position: absolute;
+  inset: -11px;
+  border: 2px solid rgba(226, 162, 38, 0.6);
+  border-radius: 50%;
+  content: "";
+  animation: player-tutorial-target-pulse-v198 1.35s ease-out infinite;
+}
+
+.player-tutorial-practice-map-v198 button:focus-visible {
+  outline: 3px solid #142620;
+  outline-offset: 1px;
+}
+
+.player-tutorial-practice-map-v198 button:disabled {
+  opacity: 1;
+}
+
+.player-tutorial-practice-map-v198.is-arriving .player-tutorial-practice-user-v198 {
+  animation: player-tutorial-user-arrive-v198 650ms ease-in-out forwards;
+}
+
+.player-tutorial-practice-map-v198.is-arriving .player-tutorial-practice-arrow-v198 {
+  animation: player-tutorial-arrow-arrive-v198 650ms ease-in-out forwards;
+}
+
+.player-tutorial-practice-status-v198 {
+  min-height: 22px;
+  color: #216d4e;
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-align: center;
+}
+
+.player-tutorial-unlocked-v198 {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgba(226, 162, 38, 0.48);
+  border-radius: 8px;
+  background: #fff8e8;
+}
+
+.player-tutorial-unlocked-v198 > span {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #e2a226;
+}
+
+.player-tutorial-unlocked-v198 > span::before {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  width: 12px;
+  height: 7px;
+  border-bottom: 3px solid #142620;
+  border-left: 3px solid #142620;
+  content: "";
+  transform: rotate(-45deg);
+}
+
+.player-tutorial-unlocked-v198 p,
+.player-tutorial-unlocked-v198 h4,
+.player-tutorial-question-v198 p,
+.player-tutorial-practice-success-v198 p,
+.player-tutorial-practice-success-v198 h4,
+.player-tutorial-practice-success-v198 small {
+  margin: 0;
+}
+
+.player-tutorial-unlocked-v198 p,
+.player-tutorial-practice-success-v198 p {
+  color: #946516;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.player-tutorial-unlocked-v198 h4,
+.player-tutorial-practice-success-v198 h4 {
+  color: #142620;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.player-tutorial-question-v198 {
+  display: grid;
+  gap: 10px;
+}
+
+.player-tutorial-question-v198 > p:first-child {
+  color: #29413a;
+  font-size: 0.92rem;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.player-tutorial-answers-v198 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.player-tutorial-answers-v198 button {
+  display: grid;
+  min-width: 0;
+  min-height: 52px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid #cbd9d3;
+  border-radius: 8px;
+  background: #fff;
+  color: #193129;
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-align: left;
+}
+
+.player-tutorial-answers-v198 button:hover,
+.player-tutorial-answers-v198 button:focus-visible {
+  border-color: var(--green);
+  background: #eef7f2;
+}
+
+.player-tutorial-answers-v198 i {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(20, 38, 32, 0.2);
+}
+
+.player-tutorial-answers-v198 i[data-tone="blue"] { background: #1877d2; }
+.player-tutorial-answers-v198 i[data-tone="yellow"] { background: #e2a226; }
+
+.player-tutorial-practice-feedback-v198 {
+  padding: 9px 10px;
+  border-left: 3px solid #bd553b;
+  border-radius: 0 6px 6px 0;
+  background: #fff2ee;
+  color: #8b3525;
+  font-size: 0.79rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.player-tutorial-practice-feedback-v198[hidden] {
+  display: none;
+}
+
+.player-tutorial-practice-success-v198 {
+  display: grid;
+  min-height: 220px;
+  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  padding: 18px;
+  text-align: center;
+}
+
+.player-tutorial-practice-success-v198 > span {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dff2e8;
+  color: #17633f;
+  font-size: 1.75rem;
+  font-weight: 900;
+  animation: player-tutorial-success-v198 420ms ease-out both;
+}
+
+.player-tutorial-practice-success-v198 small {
+  max-width: 360px;
+  color: #425650;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+@keyframes player-tutorial-target-pulse-v198 {
+  from { opacity: 0.9; transform: scale(0.78); }
+  to { opacity: 0; transform: scale(1.3); }
+}
+
+@keyframes player-tutorial-arrow-guide-v198 {
+  0%, 100% { transform: rotate(58deg) translateY(0); }
+  50% { transform: rotate(58deg) translateY(-5px); }
+}
+
+@keyframes player-tutorial-user-arrive-v198 {
+  to { bottom: calc(100% - 56px); left: calc(100% - 69px); }
+}
+
+@keyframes player-tutorial-arrow-arrive-v198 {
+  to { opacity: 0; transform: rotate(58deg) translateY(-34px); }
+}
+
+@keyframes player-tutorial-success-v198 {
+  from { opacity: 0; transform: scale(0.75); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-tutorial-practice-arrow-v198,
+  .player-tutorial-practice-map-v198 button span::after,
+  .player-tutorial-practice-map-v198.is-arriving .player-tutorial-practice-user-v198,
+  .player-tutorial-practice-map-v198.is-arriving .player-tutorial-practice-arrow-v198,
+  .player-tutorial-practice-success-v198 > span {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
 }
 
 .player-tutorial-confirm-v197 {

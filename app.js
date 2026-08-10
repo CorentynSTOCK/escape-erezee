@@ -7044,15 +7044,16 @@ escapeI18nInstall();
 })();
 
 
-/* player-prestart-tutorial-v197 */
-(function initPlayerPrestartTutorialV197() {
-  if (window.__playerPrestartTutorialV197) return;
-  window.__playerPrestartTutorialV197 = true;
+/* player-immersive-tutorial-v198 */
+(function initPlayerPrestartTutorialV198() {
+  if (window.__playerPrestartTutorialV198) return;
+  window.__playerPrestartTutorialV198 = true;
 
   const STORAGE_PREFIX = "escape-erezee-tutorial-v197:";
   const completedTeamIds = new Set();
   let state = null;
   let lastFocusedElement = null;
+  let practiceTransitionTimer = null;
 
   function language() {
     return typeof playerLangV151 === "function" ? playerLangV151() : "fr";
@@ -7061,7 +7062,7 @@ escapeI18nInstall();
   function labels() {
     const values = {
       fr: {
-        open: "Voir le tutoriel (1 min)",
+        open: "Tutoriel interactif (2 min)",
         title: "Bien utiliser votre guide de jeu",
         close: "Fermer le tutoriel",
         step: "Étape {current} sur {total}",
@@ -7069,7 +7070,23 @@ escapeI18nInstall();
         next: "Suivant",
         finish: "J'ai compris, démarrer",
         reviewed: "Fermer le tutoriel",
+        practicePending: "Terminez l'essai ci-dessus",
         confirm: "J'ai compris comment utiliser la carte et je reste attentif à mon environnement.",
+        practice: {
+          mapInstruction: "Touchez le point jaune pour simuler votre arrivée dans la zone.",
+          targetLabel: "Point jaune d'essai. Touchez pour arriver.",
+          mapStatus: "La flèche vous guide vers le point jaune.",
+          arriving: "Arrivée dans la zone...",
+          unlockedKicker: "Zone atteinte",
+          unlockedTitle: "Énigme test débloquée",
+          question: "Quel repère indique votre prochaine étape sur la carte ?",
+          blue: "Le point bleu",
+          yellow: "Le point jaune",
+          wrong: "Pas tout à fait : le point bleu représente votre position. Essayez encore.",
+          successKicker: "Essai réussi",
+          successTitle: "Parfait, vous êtes prêt !",
+          successText: "Pendant le vrai parcours, l'énigme apparaîtra automatiquement lorsque vous entrerez dans la bonne zone.",
+        },
         steps: [
           {
             kicker: "Carte et direction",
@@ -7089,10 +7106,16 @@ escapeI18nInstall();
             text: "Restez sur les chemins autorisés, arrêtez-vous pour regarder l'écran et gardez votre téléphone chargé. Le guidage plein écran reste disponible si vous avez besoin d'une carte plus grande.",
             visual: ["Chemins autorisés", "Arrêt pour lire", "Téléphone chargé"],
           },
+          {
+            kicker: "Essai guidé",
+            title: "Testez le fonctionnement avant le départ",
+            text: "Faites exactement les deux gestes que vous utiliserez pendant le parcours : rejoindre une zone puis répondre à une énigme.",
+            visual: [],
+          },
         ],
       },
       en: {
-        open: "View the tutorial (1 min)",
+        open: "Interactive tutorial (2 min)",
         title: "How to use your game guide",
         close: "Close the tutorial",
         step: "Step {current} of {total}",
@@ -7100,7 +7123,23 @@ escapeI18nInstall();
         next: "Next",
         finish: "I understand, start",
         reviewed: "Close the tutorial",
+        practicePending: "Complete the test above",
         confirm: "I understand how to use the map and will stay aware of my surroundings.",
+        practice: {
+          mapInstruction: "Tap the yellow point to simulate entering the area.",
+          targetLabel: "Practice yellow point. Tap to arrive.",
+          mapStatus: "The arrow guides you towards the yellow point.",
+          arriving: "Entering the area...",
+          unlockedKicker: "Area reached",
+          unlockedTitle: "Practice puzzle unlocked",
+          question: "Which marker shows your next step on the map?",
+          blue: "The blue point",
+          yellow: "The yellow point",
+          wrong: "Not quite: the blue point is your position. Try again.",
+          successKicker: "Test completed",
+          successTitle: "Perfect, you are ready!",
+          successText: "During the real game, the puzzle will appear automatically when you enter the correct area.",
+        },
         steps: [
           {
             kicker: "Map and direction",
@@ -7120,10 +7159,16 @@ escapeI18nInstall();
             text: "Stay on authorised paths, stop walking when looking at the screen and keep your phone charged. Full-screen guidance is available when you need a larger map.",
             visual: ["Authorised paths", "Stop to read", "Charged phone"],
           },
+          {
+            kicker: "Guided practice",
+            title: "Try the controls before you start",
+            text: "Practise the two actions you will use during the game: reach an area and then answer a puzzle.",
+            visual: [],
+          },
         ],
       },
       nl: {
-        open: "Bekijk de uitleg (1 min)",
+        open: "Interactieve uitleg (2 min)",
         title: "Zo gebruik je de spelbegeleiding",
         close: "Uitleg sluiten",
         step: "Stap {current} van {total}",
@@ -7131,7 +7176,23 @@ escapeI18nInstall();
         next: "Volgende",
         finish: "Ik begrijp het, starten",
         reviewed: "Uitleg sluiten",
+        practicePending: "Voltooi de test hierboven",
         confirm: "Ik begrijp hoe ik de kaart gebruik en blijf aandachtig voor mijn omgeving.",
+        practice: {
+          mapInstruction: "Tik op de gele stip om te simuleren dat je de zone bereikt.",
+          targetLabel: "Gele oefenstip. Tik om aan te komen.",
+          mapStatus: "De pijl begeleidt je naar de gele stip.",
+          arriving: "Je komt de zone binnen...",
+          unlockedKicker: "Zone bereikt",
+          unlockedTitle: "Oefenraadsel ontgrendeld",
+          question: "Welke markering toont je volgende etappe op de kaart?",
+          blue: "De blauwe stip",
+          yellow: "De gele stip",
+          wrong: "Niet helemaal: de blauwe stip is je positie. Probeer opnieuw.",
+          successKicker: "Test geslaagd",
+          successTitle: "Perfect, je bent klaar!",
+          successText: "Tijdens het echte parcours verschijnt het raadsel automatisch wanneer je de juiste zone bereikt.",
+        },
         steps: [
           {
             kicker: "Kaart en richting",
@@ -7150,6 +7211,12 @@ escapeI18nInstall();
             title: "Houd de app open en speel veilig",
             text: "Blijf op toegestane paden, stop met lopen wanneer je naar het scherm kijkt en houd je telefoon opgeladen. Begeleiding op volledig scherm blijft beschikbaar voor een grotere kaart.",
             visual: ["Toegestane paden", "Stop om te lezen", "Telefoon opgeladen"],
+          },
+          {
+            kicker: "Begeleide test",
+            title: "Probeer de bediening voor de start",
+            text: "Oefen de twee handelingen die je tijdens het spel gebruikt: bereik een zone en beantwoord daarna een raadsel.",
+            visual: [],
           },
         ],
       },
@@ -7195,12 +7262,12 @@ escapeI18nInstall();
           '<div><p id="player-tutorial-progress-label-v197"></p><h2 id="player-tutorial-title-v197"></h2></div>',
           '<button class="player-tutorial-close-v197" type="button" data-tutorial-action-v197="close" aria-label=""></button>',
         '</header>',
-        '<div class="player-tutorial-progress-v197" aria-hidden="true"><i></i><i></i><i></i></div>',
+        '<div class="player-tutorial-progress-v197" aria-hidden="true"></div>',
         '<div class="player-tutorial-content-v197">',
           '<p class="player-tutorial-kicker-v197" id="player-tutorial-kicker-v197"></p>',
           '<h3 id="player-tutorial-step-title-v197"></h3>',
           '<p id="player-tutorial-step-text-v197"></p>',
-          '<div class="player-tutorial-visual-v197" id="player-tutorial-visual-v197" aria-hidden="true"></div>',
+          '<div class="player-tutorial-visual-v197" id="player-tutorial-visual-v197"></div>',
           '<label class="player-tutorial-confirm-v197" id="player-tutorial-confirm-row-v197" hidden>',
             '<input id="player-tutorial-confirm-v197" type="checkbox" />',
             '<span id="player-tutorial-confirm-label-v197"></span>',
@@ -7223,13 +7290,62 @@ escapeI18nInstall();
         renderDialog();
       } else if (action === "next") {
         completeStep();
+      } else if (action === "practice-arrive") {
+        runPracticeArrival();
+      } else if (action === "practice-answer") {
+        submitPracticeAnswer(event.target.closest("[data-practice-answer-v198]")?.dataset.practiceAnswerV198);
       }
     });
     overlay.querySelector("#player-tutorial-confirm-v197")?.addEventListener("change", renderDialog);
     return overlay;
   }
 
-  function visualMarkup(step, visual) {
+  function practiceMarkup(copy) {
+    const phase = state?.practicePhase || "map";
+    if (phase === "question") {
+      return [
+        '<div class="player-tutorial-practice-v198">',
+          '<div class="player-tutorial-unlocked-v198">',
+            '<span aria-hidden="true"></span>',
+            '<div><p>' + escapeHtml(copy.practice.unlockedKicker) + '</p><h4>' + escapeHtml(copy.practice.unlockedTitle) + '</h4></div>',
+          '</div>',
+          '<div class="player-tutorial-question-v198">',
+            '<p>' + escapeHtml(copy.practice.question) + '</p>',
+            '<div class="player-tutorial-answers-v198">',
+              '<button type="button" data-tutorial-action-v197="practice-answer" data-practice-answer-v198="blue"><i data-tone="blue"></i><span>' + escapeHtml(copy.practice.blue) + '</span></button>',
+              '<button type="button" data-tutorial-action-v197="practice-answer" data-practice-answer-v198="yellow"><i data-tone="yellow"></i><span>' + escapeHtml(copy.practice.yellow) + '</span></button>',
+            '</div>',
+            '<p class="player-tutorial-practice-feedback-v198" role="alert"' + (state.practiceError ? '' : ' hidden') + '>' + escapeHtml(copy.practice.wrong) + '</p>',
+          '</div>',
+        '</div>',
+      ].join("");
+    }
+    if (phase === "success") {
+      return [
+        '<div class="player-tutorial-practice-success-v198" role="status">',
+          '<span aria-hidden="true">✓</span>',
+          '<p>' + escapeHtml(copy.practice.successKicker) + '</p>',
+          '<h4>' + escapeHtml(copy.practice.successTitle) + '</h4>',
+          '<small>' + escapeHtml(copy.practice.successText) + '</small>',
+        '</div>',
+      ].join("");
+    }
+    const arriving = phase === "arriving";
+    return [
+      '<div class="player-tutorial-practice-v198">',
+        '<p class="player-tutorial-practice-instruction-v198"><b>1</b><span>' + escapeHtml(copy.practice.mapInstruction) + '</span></p>',
+        '<div class="player-tutorial-practice-map-v198' + (arriving ? ' is-arriving' : '') + '">',
+          '<span class="player-tutorial-practice-route-v198"></span>',
+          '<span class="player-tutorial-practice-user-v198"></span>',
+          '<span class="player-tutorial-practice-arrow-v198"></span>',
+          '<button type="button" data-tutorial-action-v197="practice-arrive" aria-label="' + escapeHtml(copy.practice.targetLabel) + '"' + (arriving ? ' disabled' : '') + '><span></span></button>',
+        '</div>',
+        '<p class="player-tutorial-practice-status-v198" role="status">' + escapeHtml(arriving ? copy.practice.arriving : copy.practice.mapStatus) + '</p>',
+      '</div>',
+    ].join("");
+  }
+
+  function visualMarkup(step, visual, copy) {
     if (step === 0) {
       return [
         '<div class="player-tutorial-map-v197">',
@@ -7250,9 +7366,35 @@ escapeI18nInstall();
         return '<span><b>' + (index + 1) + '</b><small>' + escapeHtml(label) + '</small></span>';
       }).join("") + '</div>';
     }
+    if (step === 3) return practiceMarkup(copy);
     return '<div class="player-tutorial-checks-v197">' + visual.map(function (label) {
       return '<span><b aria-hidden="true">✓</b>' + escapeHtml(label) + '</span>';
     }).join("") + '</div>';
+  }
+
+  function runPracticeArrival() {
+    if (!state || state.step !== labels().steps.length - 1 || state.practicePhase !== "map") return;
+    state.practicePhase = "arriving";
+    state.practiceError = false;
+    renderDialog();
+    window.clearTimeout(practiceTransitionTimer);
+    practiceTransitionTimer = window.setTimeout(function () {
+      if (!state || state.practicePhase !== "arriving") return;
+      state.practicePhase = "question";
+      renderDialog();
+    }, 700);
+  }
+
+  function submitPracticeAnswer(answer) {
+    if (!state || state.practicePhase !== "question") return;
+    if (answer === "yellow") {
+      state.practicePassed = true;
+      state.practiceError = false;
+      state.practicePhase = "success";
+    } else {
+      state.practiceError = true;
+    }
+    renderDialog();
   }
 
   function renderDialog() {
@@ -7266,6 +7408,12 @@ escapeI18nInstall();
     const checkbox = overlay.querySelector("#player-tutorial-confirm-v197");
     const confirmRow = overlay.querySelector("#player-tutorial-confirm-row-v197");
     const nextButton = overlay.querySelector('[data-tutorial-action-v197="next"]');
+    const progress = overlay.querySelector(".player-tutorial-progress-v197");
+    const visualRoot = overlay.querySelector("#player-tutorial-visual-v197");
+
+    if (progress.childElementCount !== copy.steps.length) {
+      progress.replaceChildren(...copy.steps.map(function () { return document.createElement("i"); }));
+    }
 
     overlay.querySelector("#player-tutorial-progress-label-v197").textContent = copy.step
       .replace("{current}", String(state.step + 1))
@@ -7274,7 +7422,9 @@ escapeI18nInstall();
     overlay.querySelector("#player-tutorial-kicker-v197").textContent = current.kicker;
     overlay.querySelector("#player-tutorial-step-title-v197").textContent = current.title;
     overlay.querySelector("#player-tutorial-step-text-v197").textContent = current.text;
-    overlay.querySelector("#player-tutorial-visual-v197").innerHTML = visualMarkup(state.step, current.visual);
+    visualRoot.innerHTML = visualMarkup(state.step, current.visual, copy);
+    visualRoot.setAttribute("aria-hidden", isLast ? "false" : "true");
+    visualRoot.classList.toggle("is-practice-v198", isLast);
     overlay.querySelector("#player-tutorial-confirm-label-v197").textContent = copy.confirm;
     overlay.querySelector(".player-tutorial-close-v197").setAttribute("aria-label", copy.close);
     overlay.querySelector(".player-tutorial-close-v197").title = copy.close;
@@ -7284,10 +7434,13 @@ escapeI18nInstall();
       dot.classList.toggle("is-active", index <= state.step);
     });
 
-    confirmRow.hidden = !(isLast && mustConfirm);
+    confirmRow.hidden = !(isLast && state.practicePassed && mustConfirm);
     if (!isLast) {
       nextButton.textContent = copy.next;
       nextButton.disabled = false;
+    } else if (!state.practicePassed) {
+      nextButton.textContent = copy.practicePending;
+      nextButton.disabled = true;
     } else {
       nextButton.textContent = state.startAfter ? copy.finish : copy.reviewed;
       nextButton.disabled = mustConfirm && !checkbox.checked;
@@ -7299,6 +7452,8 @@ escapeI18nInstall();
     if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
     document.body.classList.remove("player-tutorial-open-v197");
+    window.clearTimeout(practiceTransitionTimer);
+    practiceTransitionTimer = null;
     state = null;
     if (lastFocusedElement?.isConnected) lastFocusedElement.focus({ preventScroll: true });
     lastFocusedElement = null;
@@ -7316,6 +7471,7 @@ escapeI18nInstall();
     const team = typeof getCurrentTeam === "function" ? getCurrentTeam() : null;
     const mustConfirm = team?.status === "briefing" && !isCompleted(state.teamId);
     const checkbox = document.querySelector("#player-tutorial-confirm-v197");
+    if (!state.practicePassed) return;
     if (mustConfirm && !checkbox?.checked) return;
     const shouldStart = state.startAfter && team?.status === "briefing";
     if (team?.status === "briefing") markCompleted(state.teamId);
@@ -7333,6 +7489,9 @@ escapeI18nInstall();
       step: 0,
       startAfter: Boolean(options?.startAfter),
       teamId: team.id,
+      practicePhase: "map",
+      practicePassed: false,
+      practiceError: false,
     };
     const checkbox = overlay.querySelector("#player-tutorial-confirm-v197");
     if (checkbox) checkbox.checked = false;
