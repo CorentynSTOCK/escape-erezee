@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
 const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = globalThis.process?.env?.DATA_DIR || path.join(ROOT_DIR, "data");
@@ -34,8 +35,12 @@ const MIME_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
+  ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".webp": "image/webp",
   ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 function sendJson(response, statusCode, payload, headers = {}) {
@@ -45,6 +50,61 @@ function sendJson(response, statusCode, payload, headers = {}) {
     ...headers,
   });
   response.end(JSON.stringify(payload));
+}
+
+function responseEncoding(request) {
+  const accepted = String(request?.headers?.["accept-encoding"] || "").toLowerCase();
+  if (accepted.includes("br")) return "br";
+  if (accepted.includes("gzip")) return "gzip";
+  return "identity";
+}
+
+function encodeResponseBody(request, body) {
+  const source = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+  if (source.length < 1024) return { body: source, encoding: "identity" };
+  const accepted = String(request?.headers?.["accept-encoding"] || "").toLowerCase();
+  if (source.length > 2 * 1024 * 1024 && accepted.includes("gzip")) {
+    return { body: gzipSync(source, { level: 4 }), encoding: "gzip" };
+  }
+  const encoding = responseEncoding(request);
+  if (encoding === "br") {
+    return {
+      body: brotliCompressSync(source, {
+        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 },
+      }),
+      encoding,
+    };
+  }
+  if (encoding === "gzip") return { body: gzipSync(source, { level: 6 }), encoding };
+  return { body: source, encoding: "identity" };
+}
+
+function sendOptimizedJson(request, response, statusCode, payload, headers = {}) {
+  const raw = Buffer.from(JSON.stringify(payload));
+  const etag = headers.ETag || headers.Etag || `"${createHash("sha256").update(raw).digest("hex").slice(0, 24)}"`;
+  const cacheControl = headers["Cache-Control"] || "no-store";
+  if (request?.headers?.["if-none-match"] === etag && statusCode === 200) {
+    response.writeHead(304, {
+      "Cache-Control": cacheControl,
+      ETag: etag,
+      Vary: "Accept-Encoding",
+    });
+    response.end();
+    return;
+  }
+
+  const encoded = encodeResponseBody(request, raw);
+  const responseHeaders = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": encoded.body.length,
+    "Cache-Control": cacheControl,
+    ETag: etag,
+    Vary: "Accept-Encoding",
+    ...headers,
+  };
+  if (encoded.encoding !== "identity") responseHeaders["Content-Encoding"] = encoded.encoding;
+  response.writeHead(statusCode, responseHeaders);
+  response.end(encoded.body);
 }
 
 function isAppData(value) {
@@ -3733,11 +3793,24 @@ async function handleAdminLiveV189(request, response) {
     sendJson(response, 404, { message: "Aucune donnee serveur pour le moment." });
     return true;
   }
-  sendJson(response, 200, {
+  const livePayload = {
     activeRouteId: stored.activeRouteId,
     codes: stored.codes,
     teams: stored.teams,
-    updatedAt: Date.now(),
+    updatedAt: Math.max(
+      0,
+      ...stored.codes.map((code) => Number(code?.updatedAt) || Number(code?.createdAt) || 0),
+      ...stored.teams.map((team) => Math.max(
+        Number(team?.updatedAt) || 0,
+        Number(team?.lastPosition?.at) || 0,
+        Number(team?.briefingStartLocation?.at) || 0,
+        Number(team?.finishedAt) || 0,
+        Number(team?.startAt) || 0,
+      )),
+    ),
+  };
+  sendOptimizedJson(request, response, 200, livePayload, {
+    "Cache-Control": "private, no-cache",
   });
   return true;
 }
@@ -3808,10 +3881,23 @@ function externalizeImageV189(image) {
   return { ...image, dataUrl: "/api/player/media/" + hash };
 }
 
+function optimizedRouteCoverPathV200(route) {
+  const searchable = [route?.id, route?.title, route?.area].filter(Boolean).join(" ").toLowerCase();
+  if (searchable.includes("serment")) return "/assets/route-covers/serment-blier-960.jpg?v=200";
+  if (searchable.includes("carnet") || searchable.includes("val-aisne") || searchable.includes("val aisne")) {
+    return "/assets/route-covers/carnet-val-aisne-960.jpg?v=200";
+  }
+  if (searchable.includes("balise")) return "/assets/route-covers/balises-blier-960.jpg?v=200";
+  return "";
+}
+
 function externalizeRouteV189(route) {
+  const optimizedCoverPath = optimizedRouteCoverPathV200(route);
   return {
     ...route,
-    coverImage: externalizeImageV189(route.coverImage),
+    coverImage: optimizedCoverPath
+      ? { ...(route.coverImage || {}), dataUrl: optimizedCoverPath }
+      : externalizeImageV189(route.coverImage),
     puzzles: (route.puzzles || []).map((puzzle) => ({
       ...puzzle,
       image: externalizeImageV189(puzzle.image),
@@ -3839,8 +3925,8 @@ async function handlePublicCatalogV189(request, response) {
     sendJson(response, 404, { message: "Catalogue indisponible." });
     return true;
   }
-  sendJson(response, 200, publicCatalogV189(stored), {
-    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+  sendOptimizedJson(request, response, 200, publicCatalogV189(stored), {
+    "Cache-Control": "public, max-age=300, stale-while-revalidate=1800",
   });
   return true;
 }
@@ -3892,7 +3978,7 @@ async function handlePlayerActivateV189(request, response) {
         payload: { ok: true, team, route: externalizeRouteV189(route) },
       };
     });
-    sendJson(response, result.status, result.payload);
+    sendOptimizedJson(request, response, result.status, result.payload);
   } catch (error) {
     sendJson(response, 400, { message: error.message || "Activation impossible." });
   }
@@ -3920,7 +4006,7 @@ async function handlePlayerSessionV189(request, response) {
       sendJson(response, 403, { message: "Session joueur invalide." });
       return true;
     }
-    sendJson(response, 200, { ok: true, team, route: externalizeRouteV189(route) });
+    sendOptimizedJson(request, response, 200, { ok: true, team, route: externalizeRouteV189(route) });
   } catch (error) {
     sendJson(response, 400, { message: error.message || "Session joueur impossible." });
   }
@@ -4131,13 +4217,17 @@ async function handleApi(request, response, pathname) {
       return true;
     }
     const settings = await readAdminSettingsV138();
-    sendJson(response, 200, settings.maintenance);
+    sendOptimizedJson(request, response, 200, settings.maintenance, {
+      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+    });
     return true;
   }
 
   if (pathname === "/api/public/site-config") {
     if (request.method !== "GET") { sendJson(response, 405, { message: "Methode non autorisee." }); return true; }
-    sendJson(response, 200, await readGrowthSettingsV145());
+    sendOptimizedJson(request, response, 200, await readGrowthSettingsV145(), {
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=1800",
+    });
     return true;
   }
 
@@ -4398,7 +4488,9 @@ async function handleApi(request, response, pathname) {
       sendJson(response, 404, { message: "Aucune donnee serveur pour le moment." });
       return true;
     }
-    sendJson(response, 200, stored);
+    sendOptimizedJson(request, response, 200, stored, {
+      "Cache-Control": "private, no-cache",
+    });
     return true;
   }
 
@@ -4465,7 +4557,7 @@ function resolveStaticPath(pathname) {
   return resolved;
 }
 
-async function serveStaticFile(response, pathname) {
+async function serveStaticFile(request, response, pathname) {
   const filePath = resolveStaticPath(pathname);
   if (!filePath) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" });
@@ -4475,18 +4567,38 @@ async function serveStaticFile(response, pathname) {
   try {
     const fileStat = await stat(filePath);
     const finalPath = fileStat.isDirectory() ? path.join(filePath, "index.html") : filePath;
-    const content = await readFile(finalPath);
+    const finalStat = fileStat.isDirectory() ? await stat(finalPath) : fileStat;
     const extension = path.extname(finalPath).toLowerCase();
-    const immutable = [".css", ".js", ".svg", ".jpg", ".jpeg", ".png", ".webp", ".ico"].includes(extension);
-    response.writeHead(200, {
+    const immutable = [".css", ".js", ".svg", ".jpg", ".jpeg", ".png", ".webp", ".ico"].includes(extension)
+      && path.basename(finalPath) !== "service-worker.js";
+    const cacheControl = immutable ? "public, max-age=31536000, immutable" : "no-cache";
+    const etag = `W/"${finalStat.size.toString(16)}-${Math.round(finalStat.mtimeMs).toString(16)}"`;
+    if (request.headers["if-none-match"] === etag) {
+      response.writeHead(304, {
+        "Cache-Control": cacheControl,
+        ETag: etag,
+        Vary: "Accept-Encoding",
+      });
+      response.end();
+      return;
+    }
+
+    const content = await readFile(finalPath);
+    const compressible = [".css", ".html", ".js", ".json", ".svg", ".webmanifest", ".xml", ".txt"].includes(extension);
+    const encoded = compressible ? encodeResponseBody(request, content) : { body: content, encoding: "identity" };
+    const headers = {
       "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Content-Length": content.length,
-      "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+      "Content-Length": encoded.body.length,
+      "Cache-Control": cacheControl,
+      ETag: etag,
+      Vary: "Accept-Encoding",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=(self), accelerometer=(self), gyroscope=(self)",
-    });
-    response.end(content);
+    };
+    if (encoded.encoding !== "identity") headers["Content-Encoding"] = encoded.encoding;
+    response.writeHead(200, headers);
+    response.end(encoded.body);
   } catch {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" });
     response.end("Not found");
@@ -4511,7 +4623,7 @@ export function startServer(options = {}) {
       if (seoHandled) return;
       const handled = await handleApi(request, response, requestUrl.pathname);
       if (handled) return;
-      await serveStaticFile(response, requestUrl.pathname);
+      await serveStaticFile(request, response, requestUrl.pathname);
     } catch (error) {
       sendJson(response, 500, { message: error.message || "Erreur serveur." });
     }

@@ -502,10 +502,9 @@ async function fetchDataFromServerWithRetry() {
 
   for (let attempt = 1; attempt <= 7; attempt += 1) {
     try {
-      const separator = API_DATA_URL.includes("?") ? "&" : "?";
-      const response = await fetch(API_DATA_URL + separator + "sync=" + Date.now() + "-" + attempt, {
+      const response = await fetch(API_DATA_URL, {
         headers: { Accept: "application/json" },
-        cache: "no-store",
+        cache: "no-cache",
         credentials: "same-origin",
       });
 
@@ -581,8 +580,11 @@ const PLAYER_SESSION_URL_V189 = "/api/player/session";
 const ADMIN_LIVE_URL_V189 = "/api/admin/live";
 const PLAYER_GUIDANCE_GPS_INTERVAL_V189 = 1000;
 const PLAYER_IDLE_GPS_INTERVAL_V189 = 60000;
+const ADMIN_LIVE_REFRESH_FOREGROUND_MS_V200 = 30000;
+const ADMIN_LIVE_REFRESH_BACKGROUND_MS_V200 = 60000;
 let playerLastProcessedGpsAtV189 = 0;
 let adminFullDataLoadedV191 = false;
+let adminLiveEtagV200 = "";
 
 function routeLooksLikePublicCatalogV191(route) {
   const puzzles = Array.isArray(route?.puzzles) ? route.puzzles : [];
@@ -697,7 +699,7 @@ async function syncDataFromServer() {
 
     const response = await fetch(PUBLIC_CATALOG_URL_V189, {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      cache: "default",
       credentials: "same-origin",
     });
     if (!response.ok) throw new Error("Le catalogue public n'a pas repondu correctement.");
@@ -919,11 +921,19 @@ async function refreshLiveTeamsFromServer() {
   lastLiveTeamRefreshAt = Date.now();
   const refreshStartedAt = lastLiveTeamRefreshAt;
   try {
-    const response = await fetch(ADMIN_LIVE_URL_V189 + "?live=" + Date.now(), {
-      headers: { Accept: "application/json" },
+    const headers = { Accept: "application/json" };
+    if (adminLiveEtagV200) headers["If-None-Match"] = adminLiveEtagV200;
+    const response = await fetch(ADMIN_LIVE_URL_V189, {
+      headers,
       cache: "no-store",
       credentials: "same-origin",
     });
+    if (response.status === 304) {
+      serverSyncEnabled = true;
+      lastLiveTeamSuccessAt = Date.now();
+      renderTeamSyncSummary();
+      return;
+    }
     if (!response.ok) {
       serverSyncEnabled = false;
       lastLiveTeamErrorAt = Date.now();
@@ -931,6 +941,7 @@ async function refreshLiveTeamsFromServer() {
       return;
     }
 
+    adminLiveEtagV200 = response.headers.get("ETag") || adminLiveEtagV200;
     const serverData = await response.json();
     if (!serverData || !Array.isArray(serverData.teams) || !Array.isArray(serverData.codes)) return;
 
@@ -1823,7 +1834,10 @@ function startTicker() {
       }
       if (geolocationWatchId === null || now - lastPlayerPositionRefreshAt >= 90000) requestPlayerPositionRefresh();
     }
-    if (isAdminRouteActive() && adminAuthenticated && now - lastLiveTeamRefreshAt > 5000) {
+    const adminLiveRefreshMs = document.hidden
+      ? ADMIN_LIVE_REFRESH_BACKGROUND_MS_V200
+      : ADMIN_LIVE_REFRESH_FOREGROUND_MS_V200;
+    if (isAdminRouteActive() && adminAuthenticated && now - lastLiveTeamRefreshAt > adminLiveRefreshMs) {
       refreshLiveTeamsFromServer();
     }
     if (isAdminRouteActive() && adminAuthenticated) renderTeamTable();
@@ -5379,7 +5393,7 @@ function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!["http:", "https:"].includes(location.protocol)) return;
 
-  navigator.serviceWorker.register("service-worker.js")
+  navigator.serviceWorker.register("service-worker.js?v=200")
     .then((registration) => {
       registration.update().catch(() => {});
       let updateHandled = false;
@@ -8981,7 +8995,7 @@ function createSouvenirImageV143(team, route) {
 async function loadPublicSiteConfigV143() {
   if (!canUseBackend()) return;
   try {
-    const response = await fetch(PUBLIC_SITE_CONFIG_URL_V143, { headers: { Accept: "application/json" }, cache: "no-store", credentials: "same-origin" });
+    const response = await fetch(PUBLIC_SITE_CONFIG_URL_V143, { headers: { Accept: "application/json" }, cache: "default", credentials: "same-origin" });
     if (response.ok) publicSiteConfigV143 = await response.json();
   } catch {}
 }
@@ -9132,7 +9146,7 @@ function escV145(value) { return String(value == null ? "" : value).replace(/&/g
 function starsV145(rating) { const count = Math.min(5, Math.max(1, Math.round(Number(rating) || 5))); return "★".repeat(count) + "☆".repeat(5 - count); }
 function timeV145(value) { if (!value) return "jamais"; try { return new Intl.DateTimeFormat("fr-BE", { dateStyle: "short", timeStyle: "short" }).format(new Date(Number(value))); } catch { return "date indisponible"; } }
 async function fetchJsonV145(url, options) { const response = await fetch(url, Object.assign({ credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }, options || {})); const payload = await response.json().catch(function () { return {}; }); if (!response.ok) throw new Error(payload.message || "Information indisponible."); return payload; }
-async function loadPublicGrowthV145() { try { const response = await fetch("/api/public/site-config", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }); if (!response.ok) return; publicGrowthSettingsV145 = await response.json(); if (typeof publicSiteConfigV143 !== "undefined") publicSiteConfigV143 = publicGrowthSettingsV145; renderReviewsV145(); renderPhotosV145(); } catch {} }
+async function loadPublicGrowthV145() { try { const response = await fetch("/api/public/site-config", { credentials: "same-origin", cache: "default", headers: { Accept: "application/json" } }); if (!response.ok) return; publicGrowthSettingsV145 = await response.json(); if (typeof publicSiteConfigV143 !== "undefined") publicSiteConfigV143 = publicGrowthSettingsV145; renderReviewsV145(); renderPhotosV145(); } catch {} }
 function renderReviewsV145() { const grid = document.querySelector("#customer-reviews-v143 .reviews-grid-v143"); const reviews = Array.isArray(publicGrowthSettingsV145?.reviews) ? publicGrowthSettingsV145.reviews : []; if (!grid || !reviews.length) return; grid.innerHTML = reviews.map(function (review) { return '<article><strong>' + escV145(starsV145(review.rating)) + '</strong><p>' + escV145(review.text) + '</p><span>- ' + escV145(review.name) + '</span></article>'; }).join(""); }
 function renderPhotosV145() { const shopPanel = document.querySelector(".shop-panel"); const photos = Array.isArray(publicGrowthSettingsV145?.localPhotos) ? publicGrowthSettingsV145.localPhotos : []; if (!shopPanel || !photos.length || document.querySelector("#local-photos-v145")) return; const section = document.createElement("section"); section.className = "local-photos-v145"; section.id = "local-photos-v145"; section.innerHTML = '<div><p class="section-label">Ambiance locale</p><h2>Erezee, Blier et Ardenne</h2></div><div class="local-photos-grid-v145">' + photos.slice(0, 4).map(function (photo) { return '<figure><img src="' + escV145(photo.src) + '" alt="' + escV145(photo.alt || '') + '" loading="lazy" /><figcaption>' + escV145(photo.caption || photo.alt || '') + '</figcaption></figure>'; }).join("") + '</div>'; (document.querySelector("#customer-reviews-v143") || shopPanel).insertAdjacentElement("afterend", section); }
 function adminPanelV145() { const adminContent = document.querySelector("#admin-content"); if (!adminContent) return null; let panel = document.querySelector("#admin-tools-v145"); if (panel) return panel; panel = document.createElement("section"); panel.className = "admin-tools-panel-v145"; panel.id = "admin-tools-v145"; panel.innerHTML = '<div class="admin-tools-head-v145"><div><p class="section-label">Outils commerciaux</p><h3>Avis, exports et assistance</h3><p id="admin-tools-status-v145">Chargement.</p></div><button class="secondary-button compact-button" type="button" id="admin-tools-refresh-v145">Actualiser</button></div><div class="admin-tools-grid-v145"><article class="admin-tools-card-v145 admin-tools-wide-v145" id="admin-public-settings-v145"></article><article class="admin-tools-card-v145" id="admin-export-card-v145"></article><article class="admin-tools-card-v145 admin-tools-wide-v145" id="admin-assistant-card-v145"></article><article class="admin-tools-card-v145" id="admin-stripe-test-card-v145"></article></div>'; (document.querySelector("#admin-growth-v143") || document.querySelector("#admin-ops-v138") || adminContent).insertAdjacentElement("afterend", panel); panel.querySelector("#admin-tools-refresh-v145")?.addEventListener("click", refreshAdminToolsV145); return panel; }

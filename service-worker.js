@@ -1,14 +1,13 @@
-const CACHE_NAME = "escape-erezee-v199";
+const CACHE_NAME = "escape-erezee-v200";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=198",
-  "./app.js?v=199",
+  "./app.js?v=200",
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./assets/home-hero-vicinal-v90.jpg?v=90",
   "./assets/logo-stock-sevrin-v90.jpg?v=90",
-  "./assets/logo-escape.jpg?v=42",
   "./assets/logo-escape.jpg?v=42",
 ];
 
@@ -31,10 +30,16 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(event.request.url);
   const isApiRequest = url.pathname.startsWith("/api/");
-  const isFreshAsset = /.(?:js|css)$/.test(url.pathname);
+  const isPublicApiRequest = url.pathname.startsWith("/api/public/");
+  const isVersionedAsset = /\.(?:js|css)$/.test(url.pathname) && url.searchParams.has("v");
 
-  if (isApiRequest || isFreshAsset) {
-    event.respondWith(fetch(event.request, { cache: "no-store" }));
+  if (isApiRequest) {
+    event.respondWith(fetch(event.request, { cache: isPublicApiRequest ? "default" : "no-store" }));
+    return;
+  }
+
+  if (isVersionedAsset) {
+    event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
     return;
   }
 
