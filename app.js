@@ -1162,6 +1162,24 @@ function closeArrivalModal() {
   if (!els.arrivalModal) return;
   els.arrivalModal.classList.add("is-hidden");
   updateModalLock();
+  scrollToPlayerFocusV199();
+}
+
+function scrollToPlayerFocusV199() {
+  if (location.hash !== "#player") return;
+  window.setTimeout(() => {
+    const team = getCurrentTeam();
+    const route = team ? getRoute(team.routeId) : null;
+    const puzzle = team && route ? getCurrentPuzzle(team, route) : null;
+    const finished = team?.status === "won" || team?.status === "lost";
+    const unlocked = puzzle && (!puzzle.requireLocation || team?.unlockedPuzzleIds?.includes(puzzle.id));
+    const target = finished
+      ? els.finishPanel
+      : unlocked ? els.riddleCard : els.mapPanel;
+    if (target && !target.classList.contains("is-hidden")) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, 80);
 }
 
 function getActiveRoute() {
@@ -2373,6 +2391,7 @@ function renderPlayer() {
   els.progressBlock?.classList.toggle("is-hidden", isBriefing);
   els.mapPanel.classList.toggle("is-hidden", gameFinished || isBriefing);
   els.riddleCard.classList.toggle("is-hidden", gameFinished || isBriefing);
+  if (els.gamePanel) delete els.gamePanel.dataset.playerFocusPhaseV199;
 
   if (isBriefing) {
     renderBriefing(route);
@@ -2387,14 +2406,27 @@ function renderPlayer() {
 
   if (!currentPuzzle) {
     stopGeolocationWatch();
+    els.mapPanel.classList.add("is-hidden");
+    els.riddleCard.classList.add("is-hidden");
     return;
   }
 
   const unlocked = !currentPuzzle.requireLocation || team.unlockedPuzzleIds.includes(currentPuzzle.id);
+  const guidanceVisible = !unlocked;
+  els.mapPanel.classList.toggle("is-hidden", !guidanceVisible);
+  els.riddleCard.classList.toggle("is-hidden", guidanceVisible);
+  els.mapPanel.setAttribute("aria-hidden", String(!guidanceVisible));
+  els.riddleCard.setAttribute("aria-hidden", String(guidanceVisible));
+  if (els.gamePanel) {
+    els.gamePanel.dataset.playerFocusPhaseV199 = guidanceVisible ? "guidance" : "puzzle";
+  }
+  if (!guidanceVisible && playerNavigationActiveV183) {
+    void exitPlayerNavigationV183();
+  }
   if (geolocationWatchId !== null) {
     geolocationWatchPuzzleId = currentPuzzle.id;
   }
-  renderPlayerMap(team, currentPuzzle);
+  if (guidanceVisible) renderPlayerMap(team, currentPuzzle);
   els.stepNumber.textContent = String(Math.max(currentIndex + 1, 1));
   els.stepPlace.textContent = publicPuzzleTextV156(route, currentPuzzle, "place");
   els.stepTitle.textContent = publicPuzzleTextV156(route, currentPuzzle, "title");
@@ -3021,6 +3053,9 @@ async function processPlayerGeolocationV184(position) {
     saveData({ immediate: true });
   }
 
+  const puzzleUnlocked = !puzzle.requireLocation || team.unlockedPuzzleIds.includes(puzzle.id);
+  if (puzzleUnlocked) return;
+
   if (receivedAt - playerLastGuidancePaintAtV187 >= 1000) {
     playerLastGuidancePaintAtV187 = receivedAt;
     updatePlayerMapGuidanceV183(team, puzzle, target, currentPosition);
@@ -3355,6 +3390,7 @@ function submitTextAnswer(team, route, puzzle) {
     saveData({ immediate: true });
     showToast("Bonne réponse.");
     render();
+    scrollToPlayerFocusV199();
     return;
   }
 
@@ -3377,6 +3413,7 @@ function submitPhotoAnswer(team, route, puzzle) {
   saveData({ immediate: true });
   showToast("Photo enregistrée.");
   render();
+  scrollToPlayerFocusV199();
 }
 
 function unlockNextPuzzle(team, route, puzzleId) {
@@ -10972,11 +11009,11 @@ window.__stripeTeamCountV180 = true;
     const isPlaying = context.team?.status === "playing";
     const isFirstPuzzle = isPlaying && Number(context.progress?.solved || 0) === 0;
     const completedTutorial = window.playerTutorialCompletedV197?.(context.team?.id);
-    const shouldShow = isPlaying && (helpRequested || (isFirstPuzzle && !firstGuideDismissed && !completedTutorial));
+    const unlocked = context.puzzle && (!context.puzzle.requireLocation || context.team?.unlockedPuzzleIds?.includes(context.puzzle.id));
+    const shouldShow = isPlaying && !unlocked && (helpRequested || (isFirstPuzzle && !firstGuideDismissed && !completedTutorial));
     guide.classList.toggle("is-hidden", !shouldShow);
     if (!isPlaying) return;
 
-    const unlocked = context.puzzle && (!context.puzzle.requireLocation || context.team?.unlockedPuzzleIds?.includes(context.puzzle.id));
     const action = unlocked ? "read" : "guide";
     const actionLabel = unlocked ? copy.read : copy.guide;
     guide.innerHTML = [
