@@ -36,10 +36,17 @@ test("confirmation email delivery can be checked and safely resent", async (t) =
   const originalFetch = globalThis.fetch;
   const resendCalls = [];
   let sendAttempts = 0;
+  let readRestricted = false;
   globalThis.fetch = async (input, options = {}) => {
     const url = String(input);
     if (url.startsWith("https://api.resend.com/emails/")) {
       resendCalls.push({ method: options.method || "GET", url, headers: { ...options.headers } });
+      if (readRestricted) {
+        return new Response(JSON.stringify({ message: "This API key is restricted to only send emails" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ id: url.split("/").pop(), last_event: "delivered" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -114,4 +121,13 @@ test("confirmation email delivery can be checked and safely resent", async (t) =
   assert.equal(stored.codes[0].confirmationEmailDeliveryStatus, "accepted");
   assert.equal(stored.codes[0].confirmationEmailId, "mail-resent");
   assert.equal(stored.codes[0].confirmationEmailAttempt, 2);
+
+  readRestricted = true;
+  const restrictedDelivery = await originalFetch(`${origin}/api/admin/email-delivery?code=111-TST-222`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(restrictedDelivery.status, 200);
+  const restrictedPayload = await restrictedDelivery.json();
+  assert.equal(restrictedPayload.trackingAvailable, false);
+  assert.equal(restrictedPayload.event, "accepted");
 });

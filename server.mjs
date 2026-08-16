@@ -2461,6 +2461,7 @@ async function stripeRequest(method, endpoint, params = null) {
 
 const RESEND_REQUEST_TIMEOUT_MS_V201 = 15 * 1000;
 const RESEND_SEND_ATTEMPTS_V201 = 3;
+let resendStatusReadRestrictedV201 = false;
 
 function waitV201(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -3269,15 +3270,32 @@ async function getConfirmationEmailDeliveryV201(codeValue) {
     return { status: 200, payload: { ok: true, configured: true, providerTracked: true, emailMasked, ...info, checkedAt } };
   } catch (error) {
     const checkedAt = Date.now();
+    const readRestricted = /restricted to only send emails/i.test(String(error?.message || ""));
+    if (readRestricted) resendStatusReadRestrictedV201 = true;
     await withDataMutation(async () => {
       const latest = await readStoredData();
       if (!latest) return;
       latest.codes.filter((item) => item.confirmationEmailId === providerId).forEach((item) => {
         item.confirmationEmailDeliveryCheckedAt = checkedAt;
-        item.confirmationEmailDeliveryError = error.message || "Verification impossible.";
+        item.confirmationEmailDeliveryError = readRestricted ? "Cle de lecture Resend non configuree." : error.message || "Verification impossible.";
       });
       await writeStoredData(latest);
     });
+    if (readRestricted) {
+      return {
+        status: 200,
+        payload: {
+          ok: true,
+          configured: true,
+          providerTracked: false,
+          trackingAvailable: false,
+          emailMasked,
+          ...deliveryInfoV201(code.confirmationEmailSentAt ? "accepted" : "unknown"),
+          label: "E-mail accepte. Le suivi detaille Resend necessite une cle de lecture separee.",
+          checkedAt,
+        },
+      };
+    }
     return { status: 502, payload: { message: "Le statut de livraison n'a pas pu etre verifie.", configured: true, providerTracked: true, emailMasked, checkedAt } };
   }
 }
@@ -3312,7 +3330,7 @@ async function recoverRecentConfirmationEmailsV201() {
 }
 
 async function refreshRecentDeliveryStatusesV201() {
-  if (!RESEND_API_KEY || !MAIL_FROM) return;
+  if (!RESEND_API_KEY || !MAIL_FROM || resendStatusReadRestrictedV201) return;
   const stored = await readStoredData();
   if (!stored) return;
   const now = Date.now();
@@ -3329,6 +3347,7 @@ async function refreshRecentDeliveryStatusesV201() {
       candidates.push(code.code);
     });
   for (const codeValue of candidates.slice(0, 10)) {
+    if (resendStatusReadRestrictedV201) break;
     await getConfirmationEmailDeliveryV201(codeValue).catch(() => null);
   }
 }
