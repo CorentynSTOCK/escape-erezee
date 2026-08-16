@@ -4991,25 +4991,19 @@ function renderCodeList() {
         code.customerEmail ? `E-mail : ${code.customerEmail}` : "",
         customerAddress ? `Adresse : ${customerAddress}` : "",
       ].filter(Boolean);
-      const mailStatus = code.source === "stripe"
-        ? code.confirmationEmailSentAt
-          ? "Mail envoyé"
-          : code.confirmationEmailStatus === "error"
-            ? "Mail non envoyé"
-            : code.confirmationEmailStatus === "missing_email"
-              ? "E-mail manquant"
-              : "Mail en attente"
-        : "";
+      const mailStatus = getCodeMailStatusV201(code);
       return `
         <article class="code-row">
           <div>
             <strong>${escapeHtml(code.code)}</strong>
             ${customerDetails.length ? `<p class="code-customer">${customerDetails.map(escapeHtml).join(" · ")}</p>` : ""}
-            ${mailStatus ? `<p class="code-mail-status">${escapeHtml(mailStatus)}</p>` : ""}
+            ${mailStatus.label ? `<p class="code-mail-status is-${escapeHtml(mailStatus.tone)}">${escapeHtml(mailStatus.label)}</p>` : ""}
             <p>${escapeHtml(route?.title || "Parcours supprimé")} · ${code.status === "used" ? "utilisé" : "disponible"}</p>
           </div>
           <div class="code-actions">
             <button class="secondary-button" type="button" data-copy-code="${code.code}">Copier</button>
+            ${code.source === "stripe" && code.confirmationEmailId ? `<button class="secondary-button" type="button" data-check-email="${code.code}">Vérifier livraison</button>` : ""}
+            ${code.source === "stripe" && code.customerEmail ? `<button class="secondary-button" type="button" data-resend-email="${code.code}">Renvoyer l'e-mail</button>` : ""}
             ${
               code.status === "used"
                 ? `<button class="danger-button" type="button" data-delete-code="${code.code}">Supprimer</button>`
@@ -5027,6 +5021,96 @@ function renderCodeList() {
   $$("[data-delete-code]").forEach((button) => {
     button.addEventListener("click", () => deleteUsedCode(button.dataset.deleteCode));
   });
+  $$("[data-check-email]").forEach((button) => {
+    button.addEventListener("click", () => checkCodeEmailDeliveryV201(button.dataset.checkEmail, button));
+  });
+  $$("[data-resend-email]").forEach((button) => {
+    button.addEventListener("click", () => resendCodeEmailV201(button.dataset.resendEmail, button));
+  });
+}
+
+const CODE_MAIL_DELIVERY_LABELS_V201 = {
+  accepted: { label: "Mail accepté, livraison à vérifier", tone: "warning" },
+  queued: { label: "Mail en attente d'envoi", tone: "warning" },
+  scheduled: { label: "Mail planifié", tone: "warning" },
+  sent: { label: "Mail envoyé, livraison à confirmer", tone: "warning" },
+  delivery_delayed: { label: "Livraison retardée", tone: "warning" },
+  delivered: { label: "Mail livré", tone: "success" },
+  opened: { label: "Mail livré et ouvert", tone: "success" },
+  clicked: { label: "Mail livré, lien ouvert", tone: "success" },
+  bounced: { label: "Mail rejeté par la messagerie", tone: "danger" },
+  failed: { label: "Échec de livraison", tone: "danger" },
+  suppressed: { label: "Adresse bloquée par le service d'envoi", tone: "danger" },
+  complained: { label: "Mail signalé comme indésirable", tone: "danger" },
+};
+
+function getCodeMailStatusV201(code) {
+  if (code.source !== "stripe") return { label: "", tone: "muted" };
+  if (code.confirmationEmailStatus === "error") return { label: "Mail non envoyé", tone: "danger" };
+  if (code.confirmationEmailStatus === "missing_email") return { label: "Adresse e-mail manquante", tone: "danger" };
+  const delivery = CODE_MAIL_DELIVERY_LABELS_V201[code.confirmationEmailDeliveryStatus];
+  if (delivery) return delivery;
+  if (code.confirmationEmailSentAt) return { label: "Mail accepté, livraison à vérifier", tone: "warning" };
+  return { label: "Mail en attente", tone: "warning" };
+}
+
+async function checkCodeEmailDeliveryV201(codeValue, button) {
+  if (!canUseBackend()) return;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Vérification...";
+  try {
+    const response = await fetch(`/api/admin/email-delivery?code=${encodeURIComponent(codeValue)}`, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || "Vérification impossible.");
+    const selected = data.codes.find((item) => item.code === codeValue);
+    const relatedCodes = selected?.stripeSessionId
+      ? data.codes.filter((item) => item.stripeSessionId === selected.stripeSessionId)
+      : selected ? [selected] : [];
+    relatedCodes.forEach((item) => {
+      item.confirmationEmailDeliveryStatus = payload.event;
+      item.confirmationEmailDeliveryCheckedAt = payload.checkedAt;
+    });
+    renderCodeList();
+    showToast(payload.label || "Statut e-mail actualisé.");
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = originalLabel;
+    showToast(error.message || "Vérification de l'e-mail impossible.");
+  }
+}
+
+async function resendCodeEmailV201(codeValue, button) {
+  if (!canUseBackend()) return;
+  const code = data.codes.find((item) => item.code === codeValue);
+  if (!code?.customerEmail) {
+    showToast("Adresse e-mail manquante.");
+    return;
+  }
+  if (!window.confirm("Renvoyer maintenant l'e-mail contenant le ou les codes de cette commande ?")) return;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Envoi...";
+  try {
+    const response = await fetch("/api/admin/email-delivery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ code: codeValue, confirm: "RENVOYER_EMAIL" }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || "Renvoi impossible.");
+    await syncDataFromServer();
+    showToast(payload.message || "E-mail renvoyé.");
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = originalLabel;
+    showToast(error.message || "L'e-mail n'a pas pu être renvoyé.");
+  }
 }
 
 function deleteUsedCode(codeValue) {
@@ -5393,7 +5477,7 @@ function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!["http:", "https:"].includes(location.protocol)) return;
 
-  navigator.serviceWorker.register("service-worker.js?v=200")
+  navigator.serviceWorker.register("service-worker.js?v=201")
     .then((registration) => {
       registration.update().catch(() => {});
       let updateHandled = false;

@@ -20,6 +20,7 @@ const RESEND_API_KEY = globalThis.process?.env?.RESEND_API_KEY || "";
 const MAIL_FROM = globalThis.process?.env?.MAIL_FROM || "";
 const MAIL_REPLY_TO = globalThis.process?.env?.MAIL_REPLY_TO || "";
 const PUBLIC_APP_URL = globalThis.process?.env?.PUBLIC_APP_URL || "https://escape-erezee.be";
+const BACKGROUND_JOBS_DISABLED = /^(1|true|yes)$/i.test(String(globalThis.process?.env?.DISABLE_BACKGROUND_JOBS || ""));
 const ADMIN_COOKIE_NAME = "escape_erezee_admin";
 const ADMIN_SESSION_MAX_AGE = 12 * 60 * 60;
 const ADMIN_SESSION_TOKEN = createHash("sha256")
@@ -2458,7 +2459,46 @@ async function stripeRequest(method, endpoint, params = null) {
   return payload;
 }
 
-async function sendResendEmail({ to, subject, text, html }) {
+const RESEND_REQUEST_TIMEOUT_MS_V201 = 15 * 1000;
+const RESEND_SEND_ATTEMPTS_V201 = 3;
+
+function waitV201(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function resendErrorMessageV201(payload, fallback) {
+  return compactText(payload?.message || payload?.error?.message || payload?.error) || fallback;
+}
+
+function isTransientResendFailureV201(status) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+async function fetchResendV201(endpoint, options = {}, attempts = 1) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.resend.com${endpoint}`, {
+        ...options,
+        signal: AbortSignal.timeout(RESEND_REQUEST_TIMEOUT_MS_V201),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) return payload;
+      const error = new Error(resendErrorMessageV201(payload, "Le service e-mail a refuse la demande."));
+      error.status = response.status;
+      if (!isTransientResendFailureV201(response.status) || attempt === attempts) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+      const status = Number(error?.status || 0);
+      if ((status && !isTransientResendFailureV201(status)) || attempt === attempts) throw error;
+    }
+    await waitV201(350 * attempt);
+  }
+  throw lastError || new Error("Le service e-mail est temporairement indisponible.");
+}
+
+async function sendResendEmail({ to, subject, text, html, idempotencyKey }) {
   if (!RESEND_API_KEY || !MAIL_FROM) {
     return { configured: false, sent: false, provider: "resend" };
   }
@@ -2474,19 +2514,31 @@ async function sendResendEmail({ to, subject, text, html }) {
     body.reply_to = MAIL_REPLY_TO;
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
+  const headers = {
+    Authorization: `Bearer ${RESEND_API_KEY}`,
+    "Content-Type": "application/json",
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = String(idempotencyKey).slice(0, 256);
+
+  const payload = await fetchResendV201("/emails", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || "L'e-mail n'a pas pu etre envoye.");
-  }
+  }, RESEND_SEND_ATTEMPTS_V201);
   return { configured: true, sent: true, provider: "resend", id: payload.id || null };
+}
+
+async function retrieveResendEmailV201(emailId) {
+  if (!RESEND_API_KEY || !emailId) return null;
+  return fetchResendV201(`/emails/${encodeURIComponent(emailId)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}` },
+  }, 2);
+}
+
+function resendIdempotencyKeyV201(category, value, attempt = 1) {
+  const digest = createHash("sha256").update(String(value || "unknown")).digest("hex").slice(0, 24);
+  return `escape_${category}_${digest}_${Math.max(1, Number(attempt) || 1)}`;
 }
 
 function verifyStripeSignature(rawBody, signatureHeader) {
@@ -2992,10 +3044,12 @@ async function sendConfirmationEmailForStripeOrderV178(sessionId) {
       return { configured: true, sent: false, skipped: true };
     }
 
+    const sendAttempt = Math.max(1, ...codes.map((code) => Number(code.confirmationEmailAttempt || 0)));
     codes.forEach((code) => {
       code.confirmationEmailStatus = "sending";
       code.confirmationEmailStartedAt = Date.now();
       code.confirmationEmailError = null;
+      code.confirmationEmailAttempt = sendAttempt;
     });
     await writeStoredData(stored);
 
@@ -3004,6 +3058,7 @@ async function sendConfirmationEmailForStripeOrderV178(sessionId) {
       route,
       customer: { ...customer },
       codeValues: orderedCodes.map((code) => code.code).filter(Boolean),
+      sendAttempt,
     };
   });
 
@@ -3022,6 +3077,7 @@ async function sendConfirmationEmailForStripeOrderV178(sessionId) {
       subject,
       text: buildActivationMailBodyForCodesV178(pending.codeValues, pending.route, pending.customer),
       html: buildActivationMailHtmlForCodesV178(pending.codeValues, pending.route, pending.customer),
+      idempotencyKey: resendIdempotencyKeyV201("activation", sessionId, pending.sendAttempt),
     });
     await withDataMutation(async () => {
       const stored = await readStoredData();
@@ -3033,9 +3089,12 @@ async function sendConfirmationEmailForStripeOrderV178(sessionId) {
         code.confirmationEmailProvider = mailResult.provider;
         code.confirmationEmailId = mailResult.id || null;
         code.confirmationEmailError = null;
+        code.confirmationEmailDeliveryStatus = "accepted";
+        code.confirmationEmailDeliveryCheckedAt = null;
       });
       await writeStoredData(stored);
     });
+    console.log("E-mail d'activation accepte par Resend.", { emailId: mailResult.id || null, codeCount: pending.codeValues.length });
     return mailResult;
   } catch (error) {
     await withDataMutation(async () => {
@@ -3048,12 +3107,14 @@ async function sendConfirmationEmailForStripeOrderV178(sessionId) {
       });
       await writeStoredData(stored);
     });
+    console.warn("E-mail d'activation non accepte par Resend.", error.message || "Erreur inconnue.");
     return { configured: true, sent: false, error: error.message || "E-mail non envoye." };
   }
 }
 
-async function sendConfirmationEmailForCode(codeValue) {
+async function sendConfirmationEmailForCode(codeValue, options = {}) {
   if (!RESEND_API_KEY || !MAIL_FROM) return { configured: false, sent: false };
+  const force = Boolean(options.force);
   const pending = await withDataMutation(async () => {
     const stored = await readStoredData();
     const code = stored?.codes?.find((item) => item.code === codeValue);
@@ -3061,7 +3122,7 @@ async function sendConfirmationEmailForCode(codeValue) {
     const sessionCodes = code.stripeSessionId
       ? stored.codes.filter((item) => item.source === "stripe" && compactText(item.stripeSessionId) === compactText(code.stripeSessionId)).sort((a, b) => (Number(a.teamIndex) || 0) - (Number(b.teamIndex) || 0) || a.createdAt - b.createdAt)
       : [code];
-    if (sessionCodes.every((item) => item.confirmationEmailSentAt)) return { alreadySent: true };
+    if (!force && sessionCodes.every((item) => item.confirmationEmailSentAt)) return { alreadySent: true };
     if (sessionCodes.some((item) => item.confirmationEmailStatus === "sending" && Date.now() - Number(item.confirmationEmailStartedAt || 0) < 5 * 60 * 1000)) return { alreadySending: true };
     const route = stored.routes.find((item) => item.id === code.routeId);
     if (!route || !code.customerEmail) {
@@ -3072,20 +3133,35 @@ async function sendConfirmationEmailForCode(codeValue) {
       await writeStoredData(stored);
       return { configured: true, sent: false, skipped: true };
     }
+    const previousAttempt = Math.max(0, ...sessionCodes.map((item) => Number(item.confirmationEmailAttempt || 0)));
+    const sendAttempt = force ? previousAttempt + 1 : Math.max(1, previousAttempt);
     sessionCodes.forEach((item) => {
       item.confirmationEmailStatus = "sending";
       item.confirmationEmailStartedAt = Date.now();
       item.confirmationEmailError = null;
+      item.confirmationEmailAttempt = sendAttempt;
     });
     await writeStoredData(stored);
-    return { code: { ...code, code: sessionCodes.map((item) => item.code), teamCount: code.teamCount || sessionCodes.length }, codeValues: sessionCodes.map((item) => item.code), route };
+    return { code: { ...code, code: sessionCodes.map((item) => item.code), teamCount: code.teamCount || sessionCodes.length }, codeValues: sessionCodes.map((item) => item.code), route, sendAttempt };
   });
   if (!pending || pending.alreadySent || pending.alreadySending || pending.skipped) {
-    return { configured: true, sent: Boolean(pending?.alreadySent), skipped: Boolean(pending?.skipped || pending?.alreadySending) };
+    return {
+      configured: true,
+      sent: Boolean(pending?.alreadySent),
+      skipped: Boolean(pending?.skipped || pending?.alreadySending),
+      alreadySent: Boolean(pending?.alreadySent),
+      alreadySending: Boolean(pending?.alreadySending),
+    };
   }
   try {
     const subject = Array.isArray(pending.code.code) && pending.code.code.length > 1 ? "Vos codes Escape Erezee" : "Votre code Escape Erezee";
-    const mailResult = await sendResendEmail({ to: pending.code.customerEmail, subject, text: buildActivationMailBody(pending.code.code, pending.route, pending.code), html: buildActivationMailHtml(pending.code.code, pending.route, pending.code) });
+    const mailResult = await sendResendEmail({
+      to: pending.code.customerEmail,
+      subject,
+      text: buildActivationMailBodyForCodesV178(pending.codeValues, pending.route, pending.code),
+      html: buildActivationMailHtmlForCodesV178(pending.codeValues, pending.route, pending.code),
+      idempotencyKey: resendIdempotencyKeyV201("activation", pending.code.stripeSessionId || pending.code.code, pending.sendAttempt),
+    });
     await withDataMutation(async () => {
       const stored = await readStoredData();
       if (!stored) return;
@@ -3095,9 +3171,12 @@ async function sendConfirmationEmailForCode(codeValue) {
         item.confirmationEmailProvider = mailResult.provider;
         item.confirmationEmailId = mailResult.id || null;
         item.confirmationEmailError = null;
+        item.confirmationEmailDeliveryStatus = "accepted";
+        item.confirmationEmailDeliveryCheckedAt = null;
       });
       await writeStoredData(stored);
     });
+    console.log("E-mail d'activation accepte par Resend.", { emailId: mailResult.id || null, codeCount: pending.codeValues.length, manual: force });
     return mailResult;
   } catch (error) {
     await withDataMutation(async () => {
@@ -3109,8 +3188,158 @@ async function sendConfirmationEmailForCode(codeValue) {
       });
       await writeStoredData(stored);
     });
+    console.warn("E-mail d'activation non accepte par Resend.", error.message || "Erreur inconnue.");
     return { configured: true, sent: false, error: error.message || "E-mail non envoye." };
   }
+}
+
+/* confirmation-email-delivery-v201 */
+const RESEND_DELIVERY_EVENTS_V201 = {
+  accepted: { label: "Accepte par le service d'envoi", tone: "warning" },
+  queued: { label: "En attente chez le service d'envoi", tone: "warning" },
+  scheduled: { label: "Envoi planifie", tone: "warning" },
+  sent: { label: "Envoye, livraison en attente de confirmation", tone: "warning" },
+  delivery_delayed: { label: "Livraison retardee par la messagerie du client", tone: "warning" },
+  delivered: { label: "Livre a la messagerie du client", tone: "success" },
+  opened: { label: "Livre et ouvert par le client", tone: "success" },
+  clicked: { label: "Livre, le client a ouvert un lien", tone: "success" },
+  bounced: { label: "Rejete par la messagerie du client", tone: "danger" },
+  failed: { label: "Echec de livraison", tone: "danger" },
+  suppressed: { label: "Adresse bloquee par le service d'envoi", tone: "danger" },
+  complained: { label: "Livre puis signale comme indesirable", tone: "danger" },
+};
+
+function normalizeDeliveryEventV201(value) {
+  const event = compactText(value).toLowerCase();
+  return RESEND_DELIVERY_EVENTS_V201[event] ? event : "unknown";
+}
+
+function deliveryInfoV201(event) {
+  const normalized = normalizeDeliveryEventV201(event);
+  return {
+    event: normalized,
+    ...(RESEND_DELIVERY_EVENTS_V201[normalized] || { label: "Statut de livraison inconnu", tone: "muted" }),
+  };
+}
+
+function maskEmailV201(value) {
+  const email = compactText(value);
+  const separator = email.lastIndexOf("@");
+  if (separator < 1) return email ? "Adresse renseignee" : "Adresse manquante";
+  const local = email.slice(0, separator);
+  const domain = email.slice(separator + 1);
+  return `${local.slice(0, Math.min(2, local.length))}***@${domain}`;
+}
+
+function matchingOrderCodesV201(stored, code) {
+  if (!code?.stripeSessionId) return code ? [code] : [];
+  return findStripeCodesV178(stored, code.stripeSessionId);
+}
+
+async function getConfirmationEmailDeliveryV201(codeValue) {
+  const stored = await readStoredData();
+  const code = stored?.codes?.find((item) => item.code === compactText(codeValue));
+  if (!stored || !code) return { status: 404, payload: { message: "Code introuvable." } };
+  const orderCodes = matchingOrderCodesV201(stored, code);
+  const providerId = getFirstText(...orderCodes.map((item) => item.confirmationEmailId));
+  const emailMasked = maskEmailV201(code.customerEmail);
+
+  if (!RESEND_API_KEY || !MAIL_FROM) {
+    return { status: 503, payload: { message: "Service e-mail non configure.", configured: false, emailMasked } };
+  }
+  if (!providerId) {
+    const localEvent = code.confirmationEmailSentAt ? "accepted" : code.confirmationEmailStatus === "error" ? "failed" : "unknown";
+    return { status: 200, payload: { ok: true, configured: true, emailMasked, providerTracked: false, ...deliveryInfoV201(localEvent), checkedAt: Date.now() } };
+  }
+
+  try {
+    const providerEmail = await retrieveResendEmailV201(providerId);
+    const info = deliveryInfoV201(providerEmail?.last_event);
+    const checkedAt = Date.now();
+    await withDataMutation(async () => {
+      const latest = await readStoredData();
+      if (!latest) return;
+      latest.codes.filter((item) => item.confirmationEmailId === providerId).forEach((item) => {
+        item.confirmationEmailDeliveryStatus = info.event;
+        item.confirmationEmailDeliveryCheckedAt = checkedAt;
+        item.confirmationEmailDeliveryError = null;
+      });
+      await writeStoredData(latest);
+    });
+    return { status: 200, payload: { ok: true, configured: true, providerTracked: true, emailMasked, ...info, checkedAt } };
+  } catch (error) {
+    const checkedAt = Date.now();
+    await withDataMutation(async () => {
+      const latest = await readStoredData();
+      if (!latest) return;
+      latest.codes.filter((item) => item.confirmationEmailId === providerId).forEach((item) => {
+        item.confirmationEmailDeliveryCheckedAt = checkedAt;
+        item.confirmationEmailDeliveryError = error.message || "Verification impossible.";
+      });
+      await writeStoredData(latest);
+    });
+    return { status: 502, payload: { message: "Le statut de livraison n'a pas pu etre verifie.", configured: true, providerTracked: true, emailMasked, checkedAt } };
+  }
+}
+
+async function resendConfirmationEmailV201(codeValue) {
+  const result = await sendConfirmationEmailForCode(compactText(codeValue), { force: true });
+  if (result?.sent) return { status: 200, payload: { ok: true, sent: true, message: "E-mail de confirmation renvoye." } };
+  if (result?.alreadySending) return { status: 409, payload: { message: "Un envoi est deja en cours." } };
+  return { status: 400, payload: { message: result?.error || "L'e-mail n'a pas pu etre renvoye." } };
+}
+
+async function recoverRecentConfirmationEmailsV201() {
+  if (!RESEND_API_KEY || !MAIL_FROM) return;
+  const stored = await readStoredData();
+  if (!stored) return;
+  const now = Date.now();
+  const sessions = Array.from(new Set(stored.codes
+    .filter((code) => code.source === "stripe"
+      && code.stripeSessionId
+      && code.customerEmail
+      && !code.confirmationEmailSentAt
+      && code.confirmationEmailStatus !== "missing_email"
+      && now - Number(code.createdAt || 0) >= 60 * 1000
+      && now - Number(code.createdAt || 0) <= 48 * 60 * 60 * 1000)
+    .map((code) => code.stripeSessionId)))
+    .slice(0, 5);
+  for (const sessionId of sessions) {
+    await sendConfirmationEmailForStripeOrderV178(sessionId).catch((error) => {
+      console.warn("Reprise automatique d'e-mail impossible.", error.message || "Erreur inconnue.");
+    });
+  }
+}
+
+async function refreshRecentDeliveryStatusesV201() {
+  if (!RESEND_API_KEY || !MAIL_FROM) return;
+  const stored = await readStoredData();
+  if (!stored) return;
+  const now = Date.now();
+  const candidates = [];
+  const seenProviderIds = new Set();
+  stored.codes
+    .slice()
+    .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+    .forEach((code) => {
+      const providerId = compactText(code.confirmationEmailId);
+      if (!providerId || seenProviderIds.has(providerId) || now - Number(code.createdAt || 0) > 30 * 24 * 60 * 60 * 1000) return;
+      if (now - Number(code.confirmationEmailDeliveryCheckedAt || 0) < 30 * 60 * 1000) return;
+      seenProviderIds.add(providerId);
+      candidates.push(code.code);
+    });
+  for (const codeValue of candidates.slice(0, 10)) {
+    await getConfirmationEmailDeliveryV201(codeValue).catch(() => null);
+  }
+}
+
+function startConfirmationEmailMonitorV201() {
+  const run = () => Promise.all([
+    recoverRecentConfirmationEmailsV201(),
+    refreshRecentDeliveryStatusesV201(),
+  ]).catch((error) => console.warn("Controle des e-mails impossible.", error.message || "Erreur inconnue."));
+  setTimeout(run, 60 * 1000).unref?.();
+  setInterval(run, 10 * 60 * 1000).unref?.();
 }
 
 
@@ -4284,6 +4513,29 @@ async function handleApi(request, response, pathname) {
     return true;
   }
 
+  if (pathname === "/api/admin/email-delivery") {
+    if (!isAdminRequest(request)) { sendJson(response, 401, { message: "Connexion gestion requise." }); return true; }
+    if (request.method === "GET") {
+      const requestUrl = new URL(request.url, getRequestOrigin(request));
+      const result = await getConfirmationEmailDeliveryV201(requestUrl.searchParams.get("code") || "");
+      sendJson(response, result.status, result.payload);
+      return true;
+    }
+    if (request.method === "POST") {
+      const body = await readRequestBody(request);
+      const payload = body ? JSON.parse(body) : {};
+      if (payload.confirm !== "RENVOYER_EMAIL") {
+        sendJson(response, 400, { message: "Confirmation RENVOYER_EMAIL requise." });
+        return true;
+      }
+      const result = await resendConfirmationEmailV201(payload.code);
+      sendJson(response, result.status, result.payload);
+      return true;
+    }
+    sendJson(response, 405, { message: "Methode non autorisee." });
+    return true;
+  }
+
 
 
   if (pathname === "/api/admin/incidents") {
@@ -4637,9 +4889,12 @@ export function startServer(options = {}) {
       const lanUrls = host === "0.0.0.0" ? getLanUrls(port) : [];
       console.log(`Escape Erezée prêt : ${url}`);
       lanUrls.forEach((lanUrl) => console.log(`Téléphone : ${lanUrl}`));
-      startDailyDataBackupsV134();
-      startAdminHealthMonitorV136();
-      startAdminOpsMonitorV138();
+      if (!BACKGROUND_JOBS_DISABLED) {
+        startDailyDataBackupsV134();
+        startAdminHealthMonitorV136();
+        startAdminOpsMonitorV138();
+        startConfirmationEmailMonitorV201();
+      }
       resolve({ server, url, lanUrls, port, host });
     });
   });

@@ -1773,6 +1773,18 @@ td {
   font-weight: 850;
 }
 
+.code-mail-status.is-success {
+  color: var(--success);
+}
+
+.code-mail-status.is-warning {
+  color: #8a5a00;
+}
+
+.code-mail-status.is-danger {
+  color: var(--danger);
+}
+
 .code-actions {
   display: flex;
   flex-wrap: wrap;
